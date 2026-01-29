@@ -14,7 +14,10 @@ export default function Home() {
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (!summoner) return;
-    router.push(`/analysis?summoner=${encodeURIComponent(summoner)}`);
+
+    // Default to #KR1 if no tag is provided
+    const query = summoner.includes("#") ? summoner : `${summoner}#KR1`;
+    router.push(`/analysis?summoner=${encodeURIComponent(query)}`);
   };
 
   return (

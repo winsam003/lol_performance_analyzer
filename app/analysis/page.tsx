@@ -2,63 +2,112 @@
 
 import { useSearchParams } from "next/navigation";
 import { useState, useEffect } from "react";
-import { Search, Trophy, Disc, Target, Eye, Shield, Sword, Star, Info } from "lucide-react";
+import { Search, Trophy, Disc, Target, Eye, Shield, Sword, Star, Info, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-
-// Mock Data Types
-interface Match {
-    id: number;
-    champion: string;
-    role: "TOP" | "JNG" | "MID" | "ADC" | "SUP";
-    result: "WIN" | "LOSE";
-    kda: string;
-    score: number;
-    date: string;
-    tags: Array<{ type: "Vision" | "Dmg" | "Survival" | "KDA"; label: string; color: string; bg: string }>;
-}
-
-// Mock Data Generator
-const generateMockMatches = (): Match[] => {
-    const roles = ["TOP", "JNG", "MID", "ADC", "SUP"] as const;
-    const champs = ["Ahri", "Lee Sin", "Thresh", "Ezreal", "Aatrox", "Yasuo", "Yone"];
-
-    return Array.from({ length: 20 }).map((_, i) => {
-        const score = Math.floor(Math.random() * 100) + 50;
-        const generatedTags: Match['tags'] = [];
-
-        // Mock Logic: Add tags based on random chance (simulating high performance)
-        if (Math.random() > 0.6) generatedTags.push({ type: "Dmg", label: "딜량 1등", color: "text-red-400", bg: "bg-red-500/20" });
-        if (Math.random() > 0.6) generatedTags.push({ type: "Vision", label: "시야 장악", color: "text-blue-400", bg: "bg-blue-500/20" });
-        if (Math.random() > 0.7) generatedTags.push({ type: "Survival", label: "불사신", color: "text-green-400", bg: "bg-green-500/20" });
-
-        return {
-            id: i,
-            champion: champs[Math.floor(Math.random() * champs.length)],
-            role: roles[Math.floor(Math.random() * roles.length)],
-            result: Math.random() > 0.4 ? "WIN" : "LOSE",
-            kda: `${Math.floor(Math.random() * 10)}/${Math.floor(Math.random() * 8)}/${Math.floor(Math.random() * 15)}`,
-            score: score,
-            date: `${Math.floor(Math.random() * 24)}시간 전`,
-            tags: generatedTags
-        };
-    });
-};
+import { analyzeSummoner, AnalysisResult, AnalyzedMatch } from "@/app/actions/analyze";
 
 export default function AnalysisPage() {
     const searchParams = useSearchParams();
-    const summoner = searchParams.get("summoner") || "Hide on bush";
-    const [matches, setMatches] = useState<Match[]>([]);
+    const initialSummoner = searchParams.get("summoner") || "Hide on bush#KR1";
 
+    // State
+    const [searchTerm, setSearchTerm] = useState(initialSummoner);
+    const [data, setData] = useState<AnalysisResult | null>(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    // Fetch Data Function
+    const fetchData = async (query: string) => {
+        // Default to #KR1 if no tag provided
+        const finalQuery = query.includes("#") ? query : `${query}#KR1`;
+
+        const [gameName, tagLine] = finalQuery.split("#");
+        setLoading(true);
+        setError(null);
+
+        try {
+            const result = await analyzeSummoner(gameName, tagLine);
+            if (!result) {
+                setError("소환사를 찾을 수 없거나 전적 검색에 실패했습니다.");
+            } else {
+                setData(result);
+            }
+        } catch (err) {
+            setError("알 수 없는 오류가 발생했습니다.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Initial Load
     useEffect(() => {
-        setMatches(generateMockMatches());
+        if (initialSummoner) {
+            fetchData(initialSummoner);
+        }
     }, []);
 
-    const totalScore = matches.reduce((acc, curr) => acc + curr.score, 0);
-    const averageScore = Math.floor(totalScore / matches.length);
+    const handleSearch = () => {
+        fetchData(searchTerm);
+    };
 
-    // Example "In-bun" Calculation (Mock)
+    // Loading State
+    if (loading && !data) {
+        return (
+            <main className="min-h-screen bg-[#0a0a0a] text-slate-200 flex flex-col items-center justify-center">
+                <Loader2 className="animate-spin text-blue-500 mb-4" size={48} />
+                <h2 className="text-xl font-bold animate-pulse">전적 분석 중...</h2>
+                <p className="text-slate-500 mt-2">최근 20게임을 분석하고 있습니다. 잠시만 기다려주세요.</p>
+            </main>
+        );
+    }
+
+    // Default Fallback / Empty State
+    if (!data) {
+        return (
+            <main className="min-h-screen bg-[#0a0a0a] text-slate-200">
+                <div className="border-b border-white/5 bg-[#111] sticky top-0 z-50 backdrop-blur-md bg-opacity-80">
+                    <div className="container mx-auto px-6 py-4 flex justify-between items-center">
+                        <h1 className="font-black text-xl italic tracking-tighter text-slate-100 hidden md:block">
+                            WHO <span className="text-blue-500">CARRIED?</span>
+                        </h1>
+                        <div className="flex w-full md:w-auto gap-2">
+                            <div className="relative flex-1 md:w-96">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4" />
+                                <Input
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    placeholder="소환사명 #태그"
+                                    className="pl-10 bg-black/40 border-white/10"
+                                    onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                                />
+                            </div>
+                            <Button size="sm" onClick={handleSearch} className="bg-blue-600 hover:bg-blue-500 font-bold italic">
+                                검색
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+                <div className="flex flex-col items-center justify-center mt-32 px-4 text-center">
+                    {error ? (
+                        <>
+                            <div className="text-red-500 font-bold text-2xl mb-2">Error</div>
+                            <p className="text-slate-400">{error}</p>
+                        </>
+                    ) : (
+                        <p className="text-slate-500">소환사 이름을 검색하여 분석을 시작하세요.</p>
+                    )}
+                </div>
+            </main>
+        )
+    }
+
+    const { profile, matches } = data;
+    const totalScore = matches.reduce((acc, curr) => acc + curr.score, 0);
+    const averageScore = matches.length > 0 ? Math.floor(totalScore / matches.length) : 0;
+
+    // Example "In-bun" Calculation
     const getTier = (score: number) => {
         if (score >= 120) return { name: "CARRY", color: "text-blue-400", bg: "bg-blue-500/10" };
         if (score >= 100) return { name: "1인분", color: "text-green-400", bg: "bg-green-500/10" };
@@ -69,7 +118,6 @@ export default function AnalysisPage() {
     const tier = getTier(averageScore);
 
     // --- Detailed Stats Calculation ---
-    // 1. Role-based Stats
     // 1. Role-based Stats
     const roleStats = matches.reduce((acc, match) => {
         if (!acc[match.role]) acc[match.role] = { count: 0, totalScore: 0, k: 0, d: 0, a: 0 };
@@ -94,6 +142,13 @@ export default function AnalysisPage() {
     }, {} as Record<string, number>);
 
 
+    // 3. Overall Stats (Combat, Vision, Survival)
+    const avgs = {
+        dmg: Math.floor(matches.reduce((acc, m) => acc + m.detail.totalDamageDealtToChampions, 0) / matches.length) || 0,
+        vision: (matches.reduce((acc, m) => acc + m.detail.visionScore, 0) / matches.length).toFixed(1) || "0",
+        deaths: (matches.reduce((acc, m) => acc + m.detail.deaths, 0) / matches.length).toFixed(1) || "0"
+    };
+
     return (
         <main className="min-h-screen bg-[#0a0a0a] text-slate-200">
 
@@ -107,12 +162,15 @@ export default function AnalysisPage() {
                         <div className="relative flex-1 md:w-96">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4" />
                             <Input
-                                defaultValue={summoner}
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                placeholder="소환사명 #태그"
                                 className="pl-10 bg-black/40 border-white/10"
+                                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
                             />
                         </div>
-                        <Button size="sm" className="bg-blue-600 hover:bg-blue-500 font-bold italic">
-                            검색
+                        <Button size="sm" onClick={handleSearch} disabled={loading} className="bg-blue-600 hover:bg-blue-500 font-bold italic">
+                            {loading ? <Loader2 className="animate-spin w-4 h-4" /> : "검색"}
                         </Button>
                     </div>
                 </div>
@@ -131,27 +189,40 @@ export default function AnalysisPage() {
                                 <div className="w-24 h-24 rounded-3xl bg-slate-800 mb-6 border-4 border-[#1a1a1a] shadow-2xl overflow-hidden relative group">
                                     <div className="absolute inset-0 bg-blue-500/20 group-hover:bg-transparent transition-all"></div>
                                     {/* Avatar Placeholder */}
-                                    <div className="flex items-center justify-center h-full text-xs text-slate-600 font-mono">IMG</div>
+                                    <img
+                                        src={`https://ddragon.leagueoflegends.com/cdn/14.24.1/img/profileicon/${profile.iconId}.png`}
+                                        alt="Icon"
+                                        className="w-full h-full object-cover"
+                                        onError={(e) => (e.currentTarget.src = "https://ddragon.leagueoflegends.com/cdn/14.24.1/img/profileicon/29.png")}
+                                    />
                                 </div>
-                                <h2 className="text-2xl font-bold text-white mb-2">{summoner} <span className="text-slate-500 text-lg font-normal">#KR1</span></h2>
+                                <h2 className="text-2xl font-bold text-white mb-2">{profile.name} <span className="text-slate-500 text-lg font-normal">#{profile.tag}</span></h2>
                                 <div className="inline-flex items-center gap-2 px-3 py-1 bg-slate-800/50 rounded-full border border-white/5 text-xs font-bold text-slate-400 mb-6">
-                                    <span>LV. 452</span>
+                                    <span>LV. {profile.level}</span>
                                     <span className="w-1 h-1 bg-slate-600 rounded-full"></span>
-                                    <span className="text-yellow-500">GOLD II</span>
+                                    <span className={cn(
+                                        profile.tier.includes("GOLD") ? "text-yellow-500" :
+                                            profile.tier.includes("PLATINUM") ? "text-teal-400" :
+                                                profile.tier.includes("EMERALD") ? "text-green-500" :
+                                                    profile.tier.includes("DIAMOND") ? "text-blue-400" : "text-slate-400"
+                                    )}>{profile.tier}</span>
                                 </div>
 
                                 <div className="grid grid-cols-3 gap-2 w-full pt-6 border-t border-white/5">
                                     <div className="text-center">
                                         <div className="text-xs text-slate-500 mb-1 uppercase font-bold tracking-widest">승률</div>
-                                        <div className="text-xl font-bold text-slate-200">52%</div>
+                                        <div className="text-xl font-bold text-slate-200">{profile.winRate}</div>
                                     </div>
                                     <div className="text-center border-l border-white/5">
                                         <div className="text-xs text-slate-500 mb-1 uppercase font-bold tracking-widest">평점</div>
-                                        <div className="text-xl font-bold text-slate-200">3.42</div>
+                                        <div className="text-xl font-bold text-slate-200">{matches.length > 0 ? (matches.reduce((a, b) => {
+                                            const [k, d, a_val] = b.kda.split('/').map(Number);
+                                            return a + (d === 0 ? k + a_val : (k + a_val) / d);
+                                        }, 0) / matches.length).toFixed(2) : "0.00"}</div>
                                     </div>
                                     <div className="text-center border-l border-white/5">
                                         <div className="text-xs text-slate-500 mb-1 uppercase font-bold tracking-widest">게임 수</div>
-                                        <div className="text-xl font-bold text-slate-200">142</div>
+                                        <div className="text-xl font-bold text-slate-200">{matches.length}</div>
                                     </div>
                                 </div>
                             </div>
@@ -178,12 +249,11 @@ export default function AnalysisPage() {
                                 </div>
 
                                 <p className="mt-8 text-center text-sm text-slate-400 max-w-[200px] leading-relaxed">
-                                    최근 20게임 기준<br />
-                                    당신은 평균 <strong className="text-white">1.2인분</strong>을 하고 있습니다.
+                                    최근 {matches.length}게임 기준<br />
+                                    당신은 평균 <strong className="text-white">{(averageScore / 100).toFixed(1)}인분</strong>을 하고 있습니다.
                                 </p>
 
-                                {/* Tooltip - Now inside the group wrapper and visible outside due to removed overflow-hidden on parent */}
-                                {/* Tooltip - Solid background, no transparency, high z-index */}
+                                {/* Tooltip */}
                                 <div className="absolute top-full mt-4 w-72 bg-black border border-white/20 rounded-xl p-5 shadow-[0_20px_50px_rgba(0,0,0,0.9)] opacity-0 group-hover:opacity-100 transition-all pointer-events-none group-hover:pointer-events-auto z-[9999] translate-y-2 group-hover:translate-y-0">
                                     <h4 className="font-bold text-slate-200 mb-4 text-xs uppercase tracking-wider border-b border-white/10 pb-2 text-center">점수 시스템 가이드</h4>
                                     <ul className="space-y-3">
@@ -211,14 +281,11 @@ export default function AnalysisPage() {
                                         </li>
                                         <li className="text-[10px] text-slate-500 leading-tight text-right">팀 패배의 주원인</li>
                                     </ul>
-                                    <div className="mt-4 pt-3 border-t border-white/5 text-[9px] text-slate-600 text-center">
-                                        * 점수는 라인별 가중치가 적용됩니다.
-                                    </div>
                                 </div>
                             </div>
                         </div>
                         {/* Detailed Stats Cards */}
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 gap-3">
                             {/* Role Stats */}
                             <div className="bg-[#161616] p-5 rounded-3xl border border-white/5 relative overflow-hidden group hover:border-white/10 transition-colors">
                                 <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
@@ -274,57 +341,51 @@ export default function AnalysisPage() {
                     {/* Right: Analysis Details & Match History */}
                     <div className="lg:col-span-2 space-y-8">
 
-                        {/* Role Performance Cards (Mock logic) */}
+                        {/* Role Performance Cards (Calculated) */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div className="bg-[#161616] p-6 rounded-2xl border border-white/5 flex flex-col gap-4">
                                 <div className="flex justify-between items-start">
                                     <div className="p-3 bg-red-500/10 rounded-xl text-red-500"><Sword size={20} /></div>
                                     <div className="text-right">
-                                        <div className="text-2xl font-bold">A+</div>
+                                        <div className="text-2xl font-bold">{avgs.dmg > 25000 ? "S+" : avgs.dmg > 20000 ? "A" : avgs.dmg > 15000 ? "B" : "C"}</div>
                                         <div className="text-[10px] text-slate-500 font-bold uppercase">교전 능력</div>
                                     </div>
                                 </div>
-                                <div className="h-1 w-full bg-slate-800 rounded-full overflow-hidden">
-                                    <div className="h-full bg-red-500 w-[85%]"></div>
+                                <div className="p-1">
+                                    <div className="text-xs text-slate-400 leading-relaxed">
+                                        평균 딜량 <span className="text-red-400 font-bold">{avgs.dmg.toLocaleString()}</span>
+                                    </div>
                                 </div>
-                                <p className="text-xs text-slate-400 leading-relaxed">
-                                    평균 딜량 <span className="text-red-400">22,400</span> (상위 12%)<br />
-                                    골드 대비 효율이 매우 좋습니다.
-                                </p>
                             </div>
 
                             <div className="bg-[#161616] p-6 rounded-2xl border border-white/5 flex flex-col gap-4">
                                 <div className="flex justify-between items-start">
                                     <div className="p-3 bg-blue-500/10 rounded-xl text-blue-500"><Eye size={20} /></div>
                                     <div className="text-right">
-                                        <div className="text-2xl font-bold">B-</div>
+                                        <div className="text-2xl font-bold">{Number(avgs.vision) > 40 ? "S" : Number(avgs.vision) > 20 ? "A" : "B"}</div>
                                         <div className="text-[10px] text-slate-500 font-bold uppercase">시야 장악</div>
                                     </div>
                                 </div>
-                                <div className="h-1 w-full bg-slate-800 rounded-full overflow-hidden">
-                                    <div className="h-full bg-blue-500 w-[45%]"></div>
+                                <div className="p-1">
+                                    <div className="text-xs text-slate-400 leading-relaxed">
+                                        평균 시야점수 <span className="text-blue-400 font-bold">{avgs.vision}</span>
+                                    </div>
                                 </div>
-                                <p className="text-xs text-slate-400 leading-relaxed">
-                                    시야 점수 <span className="text-blue-400">1.2/min</span><br />
-                                    제어 와드 구매가 부족합니다.
-                                </p>
                             </div>
 
                             <div className="bg-[#161616] p-6 rounded-2xl border border-white/5 flex flex-col gap-4">
                                 <div className="flex justify-between items-start">
                                     <div className="p-3 bg-green-500/10 rounded-xl text-green-500"><Shield size={20} /></div>
                                     <div className="text-right">
-                                        <div className="text-2xl font-bold">S</div>
+                                        <div className="text-2xl font-bold">{Number(avgs.deaths) < 3.0 ? "S" : Number(avgs.deaths) < 5.0 ? "A" : "C"}</div>
                                         <div className="text-[10px] text-slate-500 font-bold uppercase">생존력</div>
                                     </div>
                                 </div>
-                                <div className="h-1 w-full bg-slate-800 rounded-full overflow-hidden">
-                                    <div className="h-full bg-green-500 w-[92%]"></div>
+                                <div className="p-1">
+                                    <div className="text-xs text-slate-400 leading-relaxed">
+                                        평균 데스 <span className="text-green-400 font-bold">{avgs.deaths}</span>
+                                    </div>
                                 </div>
-                                <p className="text-xs text-slate-400 leading-relaxed">
-                                    데스 <span className="text-green-400">2.1</span> (극소)<br />
-                                    매우 안정적인 플레이를 합니다.
-                                </p>
                             </div>
                         </div>
 
@@ -332,7 +393,7 @@ export default function AnalysisPage() {
                         {/* Match List */}
                         <div>
                             <h3 className="font-bold text-lg mb-6 flex items-center gap-2">
-                                <Disc className="text-blue-500 animate-spin-slow" size={16} /> 최근 20게임 분석
+                                <Disc className="text-blue-500 animate-spin-slow" size={16} /> 최근 {matches.length}게임 분석
                             </h3>
 
                             <div className="space-y-3">
@@ -353,7 +414,12 @@ export default function AnalysisPage() {
                                         {/* Champ & Role */}
                                         <div className="flex items-center gap-3 w-32">
                                             <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-[10px] text-slate-500 overflow-hidden border border-white/10">
-                                                ICON
+                                                <img
+                                                    src={`https://ddragon.leagueoflegends.com/cdn/14.24.1/img/champion/${match.champion}.png`}
+                                                    alt={match.champion}
+                                                    className="w-full h-full object-cover scale-110"
+                                                    onError={(e) => (e.currentTarget.style.display = 'none')}
+                                                />
                                             </div>
                                             <div className="flex flex-col">
                                                 <span className="font-bold text-sm text-slate-200">{match.champion}</span>
@@ -364,7 +430,12 @@ export default function AnalysisPage() {
                                         {/* KDA */}
                                         <div className="flex flex-col w-24">
                                             <span className="text-sm font-medium text-slate-300 tracking-wider">{match.kda}</span>
-                                            <span className="text-[10px] text-slate-600">3.44:1</span>
+                                            <span className="text-[10px] text-slate-600">
+                                                {(() => {
+                                                    const [k, d, a] = match.kda.split('/').map(Number);
+                                                    return d === 0 ? "Perfect" : ((k + a) / d).toFixed(2) + ":1";
+                                                })()}
+                                            </span>
                                         </div>
 
 
