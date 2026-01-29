@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -8,12 +9,12 @@ import { cn } from "@/lib/utils";
 
 export default function Home() {
   const [summoner, setSummoner] = useState("");
+  const router = useRouter();
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (!summoner) return;
-    console.log("분석 시작:", summoner);
-    alert(`${summoner} 님의 기여도를 분석 페이지로 이동합니다.`);
+    router.push(`/analysis?summoner=${encodeURIComponent(summoner)}`);
   };
 
   return (
