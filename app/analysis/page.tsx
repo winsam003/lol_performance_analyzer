@@ -6,7 +6,7 @@ import { Search, Trophy, Disc, Target, Eye, Shield, Sword, Star, Info, Loader2 }
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { analyzeSummoner, AnalysisResult, AnalyzedMatch } from "@/app/actions/analyze";
+import { analyzeSummoner, AnalysisResult, AnalyzedMatch } from "../actions/analyze";
 
 export default function AnalysisPage() {
     const searchParams = useSearchParams();
@@ -19,23 +19,30 @@ export default function AnalysisPage() {
     const [error, setError] = useState<string | null>(null);
 
     // Fetch Data Function
+    // page.tsx 내부의 fetchData 함수
     const fetchData = async (query: string) => {
-        // Default to #KR1 if no tag provided
-        const finalQuery = query.includes("#") ? query : `${query}#KR1`;
+        console.log("클라이언트: 검색 시작!", query); // 이건 브라우저 콘솔에 뜹니다
 
+        const finalQuery = query.includes("#") ? query : `${query}#KR1`;
         const [gameName, tagLine] = finalQuery.split("#");
+
         setLoading(true);
         setError(null);
 
         try {
+            // 이 호출이 일어나는 순간 '터미널'을 보세요!
+            console.log(gameName)
+            console.log(tagLine)
             const result = await analyzeSummoner(gameName, tagLine);
+            console.log(result)
             if (!result) {
-                setError("소환사를 찾을 수 없거나 전적 검색에 실패했습니다.");
+                setError("결과가 없습니다.");
             } else {
                 setData(result);
             }
         } catch (err) {
-            setError("알 수 없는 오류가 발생했습니다.");
+            console.error(err);
+            setError("에러 발생");
         } finally {
             setLoading(false);
         }
