@@ -401,14 +401,27 @@ function AnalysisContent() {
 
                             <div className="space-y-3">
                                 {matches.map((match) => (
-                                    <div key={match.id} className="group relative bg-[#131313] hover:bg-[#181818] border border-white/5 rounded-xl p-4 transition-all duration-300 flex flex-wrap md:flex-nowrap items-center gap-4">
-
+                                    <div
+                                        key={match.id}
+                                        className={cn(
+                                            "group relative border rounded-xl p-4 transition-all duration-300 flex flex-wrap md:flex-nowrap items-center gap-4",
+                                            match.result === "WIN"
+                                                ? "bg-[#131313] hover:bg-[#181818] border-white/5"
+                                                : "bg-red-500/5 hover:bg-red-500/10 border-red-500/10" // 패배 시 투명한 빨강 배경과 테두리
+                                        )}
+                                    >
                                         {/* Result Bar */}
-                                        <div className={cn("absolute left-0 top-0 bottom-0 w-1 rounded-l-xl", match.result === "WIN" ? "bg-blue-500" : "bg-slate-700")}></div>
+                                        <div className={cn(
+                                            "absolute left-0 top-0 bottom-0 w-1 rounded-l-xl",
+                                            match.result === "WIN" ? "bg-blue-500" : "bg-red-500" // 패배 시 빨간 바
+                                        )}></div>
 
                                         {/* Info */}
                                         <div className="flex flex-col w-20 pl-4">
-                                            <span className={cn("font-bold text-xs uppercase mb-1", match.result === "WIN" ? "text-blue-400" : "text-slate-500")}>
+                                            <span className={cn(
+                                                "font-bold text-xs uppercase mb-1",
+                                                match.result === "WIN" ? "text-blue-400" : "text-red-400" // 패배 시 빨간 글씨
+                                            )}>
                                                 {match.result === "WIN" ? "승리" : "패배"}
                                             </span>
                                             <span className="text-[10px] text-slate-600">{match.date}</span>
@@ -441,10 +454,8 @@ function AnalysisContent() {
                                             </span>
                                         </div>
 
-
                                         {/* Contribution Score (Highlight) */}
                                         <div className="flex-1 flex justify-end items-center gap-6 pr-4">
-
                                             {/* Role Weight Badge Example -> Dynamic Tags */}
                                             <div className="hidden md:flex flex-col items-end gap-1">
                                                 <div className="flex gap-1">
@@ -457,22 +468,21 @@ function AnalysisContent() {
                                             </div>
 
                                             <div className="text-right">
-                                                <div className={cn("text-2xl font-black italic",
-                                                    match.score >= 120 ? "text-blue-400" :
-                                                        match.score >= 100 ? "text-green-400" :
-                                                            match.score >= 80 ? "text-slate-400" : "text-red-400"
+                                                <div className={cn(
+                                                    "text-2xl font-black italic",
+                                                    match.result === "WIN"
+                                                        ? (match.score >= 120 ? "text-blue-400" : (match.score >= 100 ? "text-green-400" : "text-slate-400"))
+                                                        : "text-red-400" // 패배 시 점수도 빨간색으로
                                                 )}>
                                                     {match.score}
                                                 </div>
                                                 <div className="text-[9px] text-slate-600 font-bold uppercase tracking-wider">Score</div>
                                             </div>
-
                                         </div>
                                     </div>
                                 ))}
                             </div>
                         </div>
-
                     </div>
                 </div>
             </div>

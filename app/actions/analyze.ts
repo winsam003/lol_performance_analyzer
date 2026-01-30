@@ -64,6 +64,7 @@ export async function analyzeSummoner(gameName: string, tagLine: string): Promis
                 ? Math.round((soloRank.wins / (soloRank.wins + soloRank.losses)) * 100) + "%"
                 : "0%",
         };
+        console.log(profile)
 
         // 4. Get Matches
         const matchIds = await getMatchIds(account.puuid, 15); // limit to 15 for speed

@@ -5,25 +5,19 @@ const MASS_REGION = "asia"; // Regional routing value (e.g., asia, americas)
 const fetchWithAuth = async (url: string) => {
     const cleanKey = API_KEY?.trim();
 
-    // 1. 요청 시작 로그 (무조건 찍힘)
-    console.log(`[RIOT_REQUEST_START] URL: ${url}`);
-
     const res = await fetch(url, {
         headers: {
             "X-Riot-Token": cleanKey || "",
         },
-        next: { revalidate: 60 },
+        cache: "no-store", // Disable cache to debug missing fields
     });
 
-    // 2. 결과 로그 (여기서 status 확인 가능)
-    console.log(`[RIOT_RESPONSE_RESULT] Status: ${res.status} | URL: ${url}`);
-
     if (!res.ok) {
-        const errorBody = await res.text();
+        const errorBody = await res.text(); // 에러 내용 확인
         console.error(`[RIOT_ERROR_BODY] ${errorBody}`);
 
         if (res.status === 404) return null;
-        throw new Error(`Riot API Error: ${res.status} ${res.statusText} at ${url} | Body: ${errorBody}`);
+        throw new Error(`Riot API Error: ${res.status} ${res.statusText} at ${url}`);
     }
 
     const data = await res.json();
