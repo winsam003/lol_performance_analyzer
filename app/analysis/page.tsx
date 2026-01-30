@@ -7,8 +7,9 @@ import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { analyzeSummoner, AnalysisResult, AnalyzedMatch } from "../actions/analyze";
+import { Suspense } from "react";
 
-export default function AnalysisPage() {
+function AnalysisContent() {
     const searchParams = useSearchParams();
     const initialSummoner = searchParams.get("summoner") || "Hide on bush#KR1";
 
@@ -21,7 +22,6 @@ export default function AnalysisPage() {
     // Fetch Data Function
     // page.tsx 내부의 fetchData 함수
     const fetchData = async (query: string) => {
-        console.log("클라이언트: 검색 시작!", query); // 이건 브라우저 콘솔에 뜹니다
 
         const finalQuery = query.includes("#") ? query : `${query}#KR1`;
         const [gameName, tagLine] = finalQuery.split("#");
@@ -30,11 +30,7 @@ export default function AnalysisPage() {
         setError(null);
 
         try {
-            // 이 호출이 일어나는 순간 '터미널'을 보세요!
-            console.log(gameName)
-            console.log(tagLine)
             const result = await analyzeSummoner(gameName, tagLine);
-            console.log(result)
             if (!result) {
                 setError("결과가 없습니다.");
             } else {
@@ -481,5 +477,12 @@ export default function AnalysisPage() {
                 </div>
             </div>
         </main>
+    );
+}
+export default function AnalysisPage() {
+    return (
+        <Suspense fallback={<div>로딩 중...</div>}>
+            <AnalysisContent />
+        </Suspense>
     );
 }
