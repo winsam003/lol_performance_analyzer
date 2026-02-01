@@ -1,6 +1,6 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { useState, useEffect, useMemo } from "react";
 import { Search, Trophy, Disc, Target, Eye, Shield, Sword, Star, Info, Loader2, Layers, User, Users, Zap, Coffee } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -33,7 +33,7 @@ const TAG_DESCRIPTIONS: Record<string, string> = {
     "완벽주의자": "1킬 이상 기록 및 노데스로 종료",
     "동에번쩍": "킬 관여율이 매우 높음",
     "관광객": "딜러임에도 딜량이 매우 낮음",
-    "리심": "서포터임에도 시야 기여가 전무함"
+    "리신": "서포터임에도 시야 기여가 전무함"
 };
 
 const SCORE_GUIDE = [
@@ -49,6 +49,7 @@ const SCORE_GUIDE = [
 
 function AnalysisContent() {
     const searchParams = useSearchParams();
+    const router = useRouter();
     const initialSummoner = searchParams.get("summoner") || "Hide on bush#KR1";
 
     const [searchTerm, setSearchTerm] = useState(initialSummoner);
@@ -60,6 +61,10 @@ function AnalysisContent() {
     const fetchData = async (query: string) => {
         const finalQuery = query.includes("#") ? query : `${query}#KR1`;
         const [gameName, tagLine] = finalQuery.split("#");
+
+        // 검색 시 URL 업데이트
+        router.push(`/analysis?summoner=${encodeURIComponent(finalQuery)}`);
+
         setLoading(true);
         setError(null);
         try {
@@ -70,7 +75,7 @@ function AnalysisContent() {
         finally { setLoading(false); }
     };
 
-    useEffect(() => { if (initialSummoner) fetchData(initialSummoner); }, []);
+    useEffect(() => { if (initialSummoner) fetchData(initialSummoner); }, [initialSummoner]);
     const handleSearch = () => fetchData(searchTerm);
 
     const filteredMatches = useMemo(() => {
@@ -79,7 +84,6 @@ function AnalysisContent() {
         return data.matches.filter(m => (m as any).queueId?.toString() === selectedQueue);
     }, [data, selectedQueue]);
 
-    // --- 챔피언별 승률 계산 로직 추가 ---
     const championStats = useMemo(() => {
         const stats: Record<string, { win: number; total: number }> = {};
         filteredMatches.forEach(m => {
@@ -123,7 +127,7 @@ function AnalysisContent() {
         if (k >= 1 && d === 0) tags.push({ type: "Survival", label: "완벽주의자", color: "text-emerald-400", bg: "bg-emerald-400/20" });
         if (k + a >= 25) tags.push({ type: "KDA", label: "동에번쩍", color: "text-pink-400", bg: "bg-pink-400/20" });
         if (match.detail.totalDamageDealtToChampions < 5000 && match.role !== "SUP") tags.push({ type: "Dmg", label: "관광객", color: "text-slate-500", bg: "bg-slate-500/20" });
-        if (match.detail.visionScore < 5 && match.role === "SUP") tags.push({ type: "Vision", label: "리심", color: "text-orange-300", bg: "bg-orange-300/20" });
+        if (match.detail.visionScore < 5 && match.role === "SUP") tags.push({ type: "Vision", label: "리신", color: "text-orange-300", bg: "bg-orange-300/20" });
 
         return Array.from(new Map(tags.map(item => [item.label, item])).values());
     };
@@ -204,7 +208,6 @@ function AnalysisContent() {
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
                     <div className="lg:col-span-1 flex flex-col gap-6">
-                        {/* 프로필 카드 */}
                         <div className="bg-[#161616] border border-white/5 rounded-3xl p-8 relative overflow-hidden">
                             <div className="absolute top-0 right-0 p-32 bg-blue-500/5 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none"></div>
                             <div className="relative z-10 flex flex-col items-center text-center">
@@ -241,7 +244,6 @@ function AnalysisContent() {
                             </div>
                         </div>
 
-                        {/* 평균 기여도 카드 */}
                         <div className="group/guide bg-[#161616] border border-white/5 rounded-3xl p-8 flex flex-col items-center justify-center relative min-h-[300px]">
                             <div className={cn("absolute inset-0 opacity-10 blur-3xl", tier.bg.replace('/10', '/30'))}></div>
                             <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-2 z-10 flex items-center gap-1.5 cursor-help">
@@ -263,8 +265,6 @@ function AnalysisContent() {
                             </div>
                         </div>
 
-
-                        {/* 챔피언별 승률 (신규 추가) */}
                         <div className="bg-[#161616] p-5 rounded-3xl border border-white/5">
                             <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2"><Trophy size={12} /> 최근 모스트 챔피언</h4>
                             <div className="space-y-3">
@@ -272,12 +272,7 @@ function AnalysisContent() {
                                     <div key={champ.name} className="flex items-center justify-between">
                                         <div className="flex items-center gap-3">
                                             <div className="w-8 h-8 rounded-lg overflow-hidden border border-white/5">
-                                                <img
-                                                    src={`https://ddragon.leagueoflegends.com/cdn/15.1.1/img/champion/${champ.name === "Mel" ? "Mel" : champ.name}.png`}
-                                                    className="w-full h-full object-cover scale-110"
-                                                    alt={champ.name}
-                                                    onError={(e) => (e.currentTarget.src = "https://ddragon.leagueoflegends.com/cdn/img/champion/tiles/Mel_0.jpg")}
-                                                />
+                                                <img src={`https://ddragon.leagueoflegends.com/cdn/15.1.1/img/champion/${champ.name}.png`} className="w-full h-full object-cover scale-110" alt={champ.name} onError={(e) => (e.currentTarget.src = "https://ddragon.leagueoflegends.com/cdn/img/champion/tiles/Mel_0.jpg")} />
                                             </div>
                                             <div className="flex flex-col">
                                                 <span className="text-xs font-bold text-slate-200">{champ.name}</span>
@@ -308,7 +303,7 @@ function AnalysisContent() {
                                 return (
                                     <div key={match.id} className={cn("relative border rounded-xl p-4 flex flex-wrap md:flex-nowrap items-center gap-4 transition-all z-10 hover:z-50", match.result === "WIN" ? "bg-[#131313] border-white/5 hover:border-blue-500/30" : "bg-red-500/5 border-red-500/10 hover:border-red-500/30")}>
                                         <div className={cn("absolute left-0 top-0 bottom-0 w-1", match.result === "WIN" ? "bg-blue-500" : "bg-red-500")}></div>
-                                        <div className="flex flex-col w-20 pl-2">
+                                        <div className="flex flex-col w-20 pl-2 shrink-0">
                                             <span className={cn("font-bold text-xs", match.result === "WIN" ? "text-blue-400" : "text-red-400")}>{match.result === "WIN" ? "승리" : "패배"}</span>
                                             <span className="text-[10px] text-slate-600">{match.date}</span>
                                         </div>
@@ -335,7 +330,7 @@ function AnalysisContent() {
                                         </div>
 
                                         <div className="flex-1 flex justify-end items-center gap-4 min-w-0">
-                                            <div className="flex flex-wrap justify-end gap-1.5 max-w-[300px]">
+                                            <div className="flex flex-wrap justify-end gap-1.5 max-w-[200px]">
                                                 {dynamicTags.map((tag, idx) => (
                                                     <div key={idx} className="group/tag relative">
                                                         <span className={cn("cursor-help text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider transition-colors", tag.bg, tag.color, "hover:brightness-125")}>
@@ -348,6 +343,27 @@ function AnalysisContent() {
                                                     </div>
                                                 ))}
                                             </div>
+
+                                            {/* 팀원 리스트 섹션 추가 */}
+                                            <div className="hidden xl:grid grid-cols-2 gap-x-3 gap-y-0.5 border-l border-white/5 pl-4 shrink-0">
+                                                {(match as any).participants?.map((p: any, idx: number) => (
+                                                    <button
+                                                        key={idx}
+                                                        onClick={() => fetchData(`${p.gameName}#${p.tagLine}`)}
+                                                        className="flex items-center gap-1 hover:bg-white/5 p-0.5 rounded transition-colors group/user w-24"
+                                                    >
+                                                        <img
+                                                            src={`https://ddragon.leagueoflegends.com/cdn/15.1.1/img/champion/${p.championName}.png`}
+                                                            className="w-3.5 h-3.5 rounded-sm border border-white/10 shrink-0"
+                                                            alt={p.championName}
+                                                        />
+                                                        <span className="text-[9px] text-slate-500 group-hover/user:text-blue-400 truncate text-left">
+                                                            {p.gameName}
+                                                        </span>
+                                                    </button>
+                                                ))}
+                                            </div>
+
                                             <div className="text-right shrink-0 ml-2">
                                                 <div className={cn("text-2xl font-black italic leading-none", match.result === "WIN" ? getTier(match.score).color : "text-red-400")}>{match.score}</div>
                                                 <div className="text-[9px] text-slate-600 font-bold uppercase mt-1">Score</div>
