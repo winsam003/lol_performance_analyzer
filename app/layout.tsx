@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
+import Link from "next/link";
+
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -28,9 +30,12 @@ export default function RootLayout({
         <header className="sticky top-0 z-50 w-full border-b border-white/5 bg-[#0b0b0b]/80 backdrop-blur-md">
           <div className="container mx-auto flex h-16 items-center justify-between px-6">
             <div className="flex items-center gap-8">
-              <div className="font-black text-2xl tracking-tighter text-white">
+              <Link
+                href="/"
+                className="font-black text-2xl tracking-tighter text-white hover:opacity-80 transition-opacity cursor-pointer"
+              >
                 LOL.WINSAM<span className="text-blue-500">.XYZ</span>
-              </div>
+              </Link>
               <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-400">
                 <a href="#" className="hover:text-white transition">
                   {/* 기여도 랭킹 */}

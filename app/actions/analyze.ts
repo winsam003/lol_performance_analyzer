@@ -3,7 +3,8 @@
 import { getAccount, getLeagueEntries, getMatchDetail, getMatchIds, getSummonerByPuuid } from "@/lib/riot";
 
 export interface AnalyzedMatch {
-    id: string; // matchId
+    id: string;
+    queueId: number;
     champion: string;
     role: "TOP" | "JNG" | "MID" | "ADC" | "SUP";
     result: "WIN" | "LOSE";
@@ -25,101 +26,92 @@ export interface SummonerProfile {
     tag: string;
     level: number;
     iconId: number;
-    tier: string; // "GOLD II"
+    tier: string;
     lp: number;
     wins: number;
     losses: number;
-    winRate: string; // "52%"
+    winRate: string;
 }
 
 export interface AnalysisResult {
     profile: SummonerProfile;
     matches: AnalyzedMatch[];
 }
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export async function analyzeSummoner(gameName: string, tagLine: string): Promise<AnalysisResult | null> {
     try {
-        // 1. Get Account (PUUID)
+        // 1. 계정 정보 조회 (PUUID 획득)
         const account = await getAccount(gameName, tagLine);
-        if (!account) throw new Error("Account not found");
+        if (!account) return null;
 
-        // 2. Get Summoner Info (ID, Level)
+        // 2. 소환사 기본 정보 조회
         const summoner = await getSummonerByPuuid(account.puuid);
-        if (!summoner) throw new Error("Summoner not found");
+        if (!summoner) return null;
 
-        // 3. Get League Info (Rank, Winrate)
-        const leagues = await getLeagueEntries(summoner.id);
-        const soloRank = leagues.find((l) => l.queueType === "RANKED_SOLO_5x5");
+        // 3. 리그 정보 조회 (중요: summoner.id 대신 account.puuid 사용)
+        let leagues: any[] = [];
+        try {
+            // 보내주신 API 리스트의 entries/by-puuid 엔드포인트 호출
+            // lib/riot.ts의 getLeagueEntries가 puuid를 받도록 되어있는지 확인하세요!
+            leagues = await getLeagueEntries(account.puuid) || [];
+        } catch (lError: any) {
+            console.warn(`⚠️ 리그 조회 실패:`, lError.message);
+            leagues = [];
+        }
+
+        const soloRank = leagues.find((l: any) => l.queueType === "RANKED_SOLO_5x5");
+        const flexRank = leagues.find((l: any) => l.queueType === "RANKED_FLEX_SR");
+        const mainLeague = soloRank || flexRank;
 
         const profile: SummonerProfile = {
             name: account.gameName,
             tag: account.tagLine,
             level: summoner.summonerLevel,
             iconId: summoner.profileIconId,
-            tier: soloRank ? `${soloRank.tier} ${soloRank.rank}` : "UNRANKED",
-            lp: soloRank ? soloRank.leaguePoints : 0,
-            wins: soloRank ? soloRank.wins : 0,
-            losses: soloRank ? soloRank.losses : 0,
-            winRate: soloRank
-                ? Math.round((soloRank.wins / (soloRank.wins + soloRank.losses)) * 100) + "%"
+            tier: mainLeague ? `${mainLeague.tier} ${mainLeague.rank}` : "UNRANKED",
+            lp: mainLeague ? mainLeague.leaguePoints : 0,
+            wins: mainLeague ? mainLeague.wins : 0,
+            losses: mainLeague ? mainLeague.losses : 0,
+            winRate: mainLeague && (mainLeague.wins + mainLeague.losses) > 0
+                ? Math.round((mainLeague.wins / (mainLeague.wins + mainLeague.losses)) * 100) + "%"
                 : "0%",
         };
-        console.log(profile)
 
-        // 4. Get Matches
-        const matchIds = await getMatchIds(account.puuid, 15); // limit to 15 for speed
+        // 429 방지를 위한 딜레이 후 매치 조회 시작
+        await delay(500);
 
-        // Parallel Fetching Details
-        const matchPromises = matchIds.map((id) => getMatchDetail(id));
-        const matchesRaw = await Promise.all(matchPromises);
+        const matchIds = await getMatchIds(account.puuid, 20);
+        const matchesRaw = [];
 
-        // 5. Process Match Data
+        // 매치 상세 정보 순차 조회 (안정성 최우선)
+        for (const id of matchIds) {
+            const detail = await getMatchDetail(id);
+            if (detail) matchesRaw.push(detail);
+            await delay(50);
+        }
+
         const analyzedMatches: AnalyzedMatch[] = matchesRaw
-            .filter((m) => m && m.info) // Filter invalid/null matches
+            .filter((m) => m && m.info)
             .map((match) => {
                 const participant = match.info.participants.find((p: any) => p.puuid === account.puuid);
                 if (!participant) return null;
 
-                // Time check
                 const now = Date.now();
-                const gameEnd = match.info.gameEndTimestamp;
-                const hoursAgo = Math.floor((now - gameEnd) / (1000 * 60 * 60));
+                const hoursAgo = Math.floor((now - match.info.gameEndTimestamp) / (1000 * 60 * 60));
                 const dateStr = hoursAgo < 24 ? `${hoursAgo}시간 전` : `${Math.floor(hoursAgo / 24)}일 전`;
 
-                // Calculate Score (Simple Algo for now)
-                // Base: (K+A)/D * 10 + (Dmg/1000) + (Vision * 0.5)
-                // Normalize to roughly 0~150 range
                 const kdaValue = participant.deaths === 0
-                    ? (participant.kills + participant.assists) * 2
+                    ? (participant.kills + participant.assists) * 1.5
                     : (participant.kills + participant.assists) / participant.deaths;
 
-                let score = Math.floor(
-                    (kdaValue * 10) +
-                    (participant.totalDamageDealtToChampions / 1500) +
-                    (participant.visionScore * 1)
-                );
-
-                // Cap/Bonus logic
+                let score = Math.floor((kdaValue * 10) + (participant.totalDamageDealtToChampions / 1500) + (participant.visionScore * 1));
                 if (participant.win) score += 20;
                 if (score > 160) score = 160;
 
-                // Tags Logic
-                const tags: AnalyzedMatch["tags"] = [];
-                if (participant.totalDamageDealtToChampions > 30000) {
-                    tags.push({ type: "Dmg", label: "딜킹", color: "text-red-400", bg: "bg-red-500/20" });
-                }
-                if (participant.visionScore > 40) {
-                    tags.push({ type: "Vision", label: "시야", color: "text-blue-400", bg: "bg-blue-500/20" });
-                }
-                if (participant.deaths <= 2) {
-                    tags.push({ type: "Survival", label: "생존", color: "text-green-400", bg: "bg-green-500/20" });
-                }
-                if (participant.pentaKills > 0) {
-                    tags.push({ type: "KDA", label: "PENTA", color: "text-yellow-400", bg: "bg-yellow-500/20" });
-                }
-
-                return {
+                const resultMatch: AnalyzedMatch = {
                     id: match.metadata.matchId,
+                    queueId: match.info.queueId,
                     champion: participant.championName,
                     role: participant.teamPosition === "UTILITY" ? "SUP"
                         : participant.teamPosition === "JUNGLE" ? "JNG"
@@ -130,7 +122,7 @@ export async function analyzeSummoner(gameName: string, tagLine: string): Promis
                     kda: `${participant.kills}/${participant.deaths}/${participant.assists}`,
                     score: score,
                     date: dateStr,
-                    tags: tags,
+                    tags: [],
                     detail: {
                         kills: participant.kills,
                         deaths: participant.deaths,
@@ -139,15 +131,13 @@ export async function analyzeSummoner(gameName: string, tagLine: string): Promis
                         visionScore: participant.visionScore
                     }
                 };
+                return resultMatch;
             })
             .filter((m): m is AnalyzedMatch => m !== null);
 
-        return {
-            profile,
-            matches: analyzedMatches,
-        };
-    } catch (error) {
-        console.error("Failed to analyze summoner:", error);
+        return { profile, matches: analyzedMatches };
+    } catch (error: any) {
+        console.error("❌ 분석 중 치명적 에러 발생:", error);
         return null;
     }
 }

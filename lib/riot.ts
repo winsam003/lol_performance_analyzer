@@ -90,8 +90,9 @@ export const getSummonerByPuuid = async (puuid: string): Promise<RiotSummoner | 
     return data;
 };
 
-export const getLeagueEntries = async (encryptedSummonerId: string): Promise<LeagueEntry[]> => {
-    const url = `https://${REGION}.api.riotgames.com/lol/league/v4/entries/by-summoner/${encryptedSummonerId}`;
+export async function getLeagueEntries(puuid: string) {
+    // const url = `https://${REGION}.api.riotgames.com/lol/league/v4/entries/by-summoner/${encryptedSummonerId}`;
+    const url = `https://kr.api.riotgames.com/lol/league/v4/entries/by-puuid/${puuid}`;
     try {
         const data = await fetchWithAuth(url);
         return data || [];
