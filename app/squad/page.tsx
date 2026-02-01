@@ -14,6 +14,24 @@ const QUEUE_TYPES = [
     { id: "440", label: "자유 랭크", icon: <Users size={14} /> },
 ];
 
+const TITLES = {
+    DEATHS: (isBad: boolean) => isBad
+        ? { title: "300원 맛집", desc: "상대에게 가장 많은 골드를 기부함", color: "red" }
+        : { title: "불사조", desc: "위험한 순간에도 끝까지 살아남음", color: "orange" },
+    EFFICIENCY: (isBad: boolean) => isBad
+        ? { title: "세금 도둑", desc: "골드 수급량 대비 영양가 없는 딜량", color: "stone" }
+        : { title: "성장형 엔진", desc: "자원을 바탕으로 팀의 승리를 견인함", color: "emerald" },
+    VISION: (isBad: boolean) => isBad
+        ? { title: "망원경", desc: "시야 점수가 권장치보다 현저히 낮음", color: "slate" }
+        : { title: "은밀한 조력자", desc: "보이지 않는 곳에서 팀을 지원함", color: "cyan" },
+    DAMAGE: (isBad: boolean) => isBad
+        ? { title: "평화주의자", desc: "팀 내 대인 피해량 기여도가 가장 낮음", color: "green" }
+        : { title: "철벽 방어", desc: "딜보다 중요한 생존과 위치 선정", color: "blue" },
+    SUSPECT: (isBad: boolean) => isBad
+        ? { title: "범인(Suspect)", desc: "포지션 대비 기여도가 가장 처참함", color: "orange" }
+        : { title: "숨은 공로자", desc: "기록 이상의 가치를 보여준 멤버", color: "purple" },
+};
+
 /** * 포지션별 점수 보정 로직 */
 const calculatePositionScore = (baseScore: number, role: string, stats: { dmg: number; vision: number; deaths: number }) => {
     let penalty = 0;
@@ -47,7 +65,7 @@ function SquadAnalysisContent() {
     const squadParam = searchParams.get("squad") || "";
 
     const [loading, setLoading] = useState(true);
-    const [refreshing, setRefreshing] = useState(false); // 새로고침 전용 상태
+    const [refreshing, setRefreshing] = useState(false);
     const [data, setData] = useState<AnalysisResult | null>(null);
     const [selectedQueue, setSelectedQueue] = useState("all");
 
@@ -58,7 +76,6 @@ function SquadAnalysisContent() {
             .map(m => m.toUpperCase().replace(/\s/g, ''));
     }, [summonerParam, squadParam]);
 
-    // 데이터 패칭 로직을 함수로 분리
     const fetchSquadData = useCallback(async (isRefresh = false) => {
         if (!summonerParam) return;
 
@@ -130,23 +147,29 @@ function SquadAnalysisContent() {
             });
         });
 
-        return Object.values(statsMap)
-            .map(s => ({
-                ...s,
-                avgScore: Math.floor(s.totalScore / s.matchCount),
-                avgKDA: `${(s.kills / s.matchCount).toFixed(1)}/${(s.deaths / s.matchCount).toFixed(1)}/${(s.assists / s.matchCount).toFixed(1)}`,
-                avgKills: (s.kills / s.matchCount).toFixed(1),
-                avgAssists: (s.assists / s.matchCount).toFixed(1),
-                avgDmg: Math.floor(s.dmg / s.matchCount),
-                avgVision: (s.vision / s.matchCount).toFixed(1),
-                efficiency: Math.floor((s.dmg / (s.gold || 1)) * 100),
-                avgDeaths: (s.deaths / s.matchCount).toFixed(1)
-            }))
-            .sort((a, b) => b.avgScore - a.avgScore);
+        // 1. 먼저 평균 데이터를 계산하여 배열로 만듭니다.
+        const result = Object.values(statsMap).map(s => ({
+            ...s,
+            avgScore: Math.floor(s.totalScore / s.matchCount),
+            avgKDA: `${(s.kills / s.matchCount).toFixed(1)}/${(s.deaths / s.matchCount).toFixed(1)}/${(s.assists / s.matchCount).toFixed(1)}`,
+            avgKills: (s.kills / s.matchCount).toFixed(1),
+            avgAssists: (s.assists / s.matchCount).toFixed(1),
+            avgDmg: Math.floor(s.dmg / s.matchCount),
+            avgVision: (s.vision / s.matchCount).toFixed(1),
+            efficiency: Math.floor((s.dmg / (s.gold || 1)) * 100),
+            avgDeaths: (s.deaths / s.matchCount).toFixed(1)
+        }));
+
+        // 2. 계산된 avgScore를 기준으로 내림차순 정렬을 수행합니다.
+        return result.sort((a, b) => b.avgScore - a.avgScore);
     }, [commonMatches, squadTargetList]);
 
     const getIdentity = (m: any, idx: number, total: number) => {
         if (idx === 0) return { label: "신(GOD)", color: "bg-purple-600" };
+        if (m.avgScore >= 100) {
+            if (idx === total - 1) return { label: "든든한 국밥", color: "bg-blue-800" };
+            return { label: "승리의 주역", color: "bg-sky-700" };
+        }
         if (Number(m.avgDeaths) >= 10) return { label: "300원 맛집", color: "bg-red-900" };
         if (m.efficiency < 40) return { label: "국가부도", color: "bg-stone-800" };
         if (Number(m.avgVision) < 8) return { label: "장님", color: "bg-slate-900" };
@@ -167,7 +190,6 @@ function SquadAnalysisContent() {
             <div className="bg-gradient-to-b from-blue-900/10 to-transparent border-b border-white/5 py-16">
                 <div className="container mx-auto px-6 text-center">
                     <div className="flex items-center justify-center gap-4 mb-8 mx-auto relative z-30 flex-wrap">
-                        {/* 큐 필터 탭 */}
                         <div className="flex bg-[#111] p-1 rounded-xl border border-white/5 w-fit">
                             {QUEUE_TYPES.map((q) => (
                                 <button key={q.id} onClick={() => setSelectedQueue(q.id)} className={cn("flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all", selectedQueue === q.id ? "bg-blue-600 text-white" : "text-slate-500 hover:text-slate-300")}>
@@ -176,7 +198,6 @@ function SquadAnalysisContent() {
                             ))}
                         </div>
 
-                        {/* 새로고침 버튼 */}
                         <button
                             onClick={() => fetchSquadData(true)}
                             disabled={refreshing}
@@ -194,17 +215,51 @@ function SquadAnalysisContent() {
                             <h1 className="text-5xl md:text-7xl font-black italic tracking-tighter text-white mb-12 uppercase">SQUAD <span className="text-blue-500">HIERARCHY</span></h1>
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 max-w-7xl mx-auto">
+                                {/* 1. 팀의 심장 (정렬된 배열의 0번) */}
                                 <SquadCard title="팀의 심장" member={filteredHierarchy[0]} color="blue" description="보정 점수 1위, 포지션 역할을 가장 잘 수행함" />
-                                <SquadCard title="가성비 괴물" member={[...filteredHierarchy].sort((a, b) => b.efficiency - a.efficiency)[0]} color="emerald" subText={`효율 ${[...filteredHierarchy].sort((a, b) => b.efficiency - a.efficiency)[0].efficiency}%`} description="적은 골드로 엄청난 딜을 뽑아내는 효율 깡패" />
-                                <SquadCard title="학살자" member={[...filteredHierarchy].sort((a, b) => Number(b.avgKills) - Number(a.avgKills))[0]} color="rose" subText={`평균 ${(filteredHierarchy.sort((a, b) => Number(b.avgKills) - Number(a.avgKills))[0] as any).avgKills}킬`} description="킬 결정력이 가장 높은 핵심 공격수" />
-                                <SquadCard title="마더 테레사" member={[...filteredHierarchy].sort((a, b) => Number(b.avgAssists) - Number(a.avgAssists))[0]} color="yellow" subText={`평균 ${(filteredHierarchy.sort((a, b) => Number(b.avgAssists) - Number(a.avgAssists))[0] as any).avgAssists}어시`} description="아군을 돕는 데 가장 헌신적인 멤버" />
+
+                                {/* 2. 가성비 괴물 (효율 기준 재정렬) */}
+                                <SquadCard title="가성비 괴물" member={[...filteredHierarchy].sort((a, b) => b.efficiency - a.efficiency)[0]} color="emerald" subText={`효율 ${[...filteredHierarchy].sort((a, b) => b.efficiency - a.efficiency)[0]?.efficiency}%`} description="적은 골드로 엄청난 딜을 뽑아내는 효율 깡패" />
+
+                                {/* 3. 학살자 (킬 기준 재정렬) */}
+                                <SquadCard title="학살자" member={[...filteredHierarchy].sort((a, b) => Number(b.avgKills) - Number(a.avgKills))[0]} color="rose" subText={`평균 ${[...filteredHierarchy].sort((a, b) => Number(b.avgKills) - Number(a.avgKills))[0]?.avgKills}킬`} description="킬 결정력이 가장 높은 핵심 공격수" />
+
+                                {/* 4. 마더 테레사 (어시 기준 재정렬) */}
+                                <SquadCard title="마더 테레사" member={[...filteredHierarchy].sort((a, b) => Number(b.avgAssists) - Number(a.avgAssists))[0]} color="yellow" subText={`평균 ${[...filteredHierarchy].sort((a, b) => Number(b.avgAssists) - Number(a.avgAssists))[0]?.avgAssists}어시`} description="아군을 돕는 데 가장 헌신적인 멤버" />
+
+                                {/* 5. 협곡 등대 (시야 기준 재정렬) */}
                                 <SquadCard title="협곡 등대" member={[...filteredHierarchy].sort((a, b) => Number(b.avgVision) - Number(a.avgVision))[0]} color="cyan" isVision description="시야 장악으로 팀의 생존을 책임짐" />
 
-                                <SquadCard title="300원 맛집" member={[...filteredHierarchy].sort((a, b) => Number(b.avgDeaths) - Number(a.avgDeaths))[0]} color="red" subText={`평균 ${[...filteredHierarchy].sort((a, b) => Number(b.avgDeaths) - Number(a.avgDeaths))[0].avgDeaths}데스`} description="상대에게 가장 많은 골드를 기부한 평화주의자" />
-                                <SquadCard title="세금 도둑" member={[...filteredHierarchy].sort((a, b) => a.efficiency - b.efficiency)[0]} color="stone" subText={`딜 효율 ${[...filteredHierarchy].sort((a, b) => a.efficiency - b.efficiency)[0].efficiency}%`} description="골드 수급량 대비 영양가 없는 딜량 기록" />
-                                <SquadCard title="망원경" member={[...filteredHierarchy].sort((a, b) => Number(a.avgVision) - Number(b.avgVision))[0]} color="slate" subText={`시야 ${[...filteredHierarchy].sort((a, b) => Number(a.avgVision) - Number(b.avgVision))[0].avgVision}점`} description="시야 점수가 포지션 권장치보다 현저히 낮음" />
-                                <SquadCard title="평화주의자" member={[...filteredHierarchy].sort((a, b) => a.avgDmg - b.avgDmg)[0]} color="green" subText={`평균 딜 ${[...filteredHierarchy].sort((a, b) => a.avgDmg - b.avgDmg)[0].avgDmg.toLocaleString()}`} description="팀 내 대인 피해량 기여도가 가장 낮음" />
-                                <SquadCard title="범인(Suspect)" member={filteredHierarchy[filteredHierarchy.length - 1]} color="orange" subText="최저 보정 점수" description="포지션 대비 기여도가 가장 처참한 오늘의 범인" />
+                                {(() => {
+                                    const isBad = (m: any) => m.avgScore < 95;
+
+                                    // 원본 배열 순서가 변하지 않도록 모두 스프레드 연산자([...])를 사용합니다.
+                                    const worstDeath = [...filteredHierarchy].sort((a, b) => Number(b.avgDeaths) - Number(a.avgDeaths))[0];
+                                    const tDeath = TITLES.DEATHS(isBad(worstDeath));
+
+                                    const worstEff = [...filteredHierarchy].sort((a, b) => a.efficiency - b.efficiency)[0];
+                                    const tEff = TITLES.EFFICIENCY(isBad(worstEff));
+
+                                    const worstVision = [...filteredHierarchy].sort((a, b) => Number(a.avgVision) - Number(b.avgVision))[0];
+                                    const tVision = TITLES.VISION(isBad(worstVision));
+
+                                    const worstDmg = [...filteredHierarchy].sort((a, b) => a.avgDmg - b.avgDmg)[0];
+                                    const tDmg = TITLES.DAMAGE(isBad(worstDmg));
+
+                                    // 마지막 등수는 이미 정렬된 filteredHierarchy의 마지막 요소를 가져옵니다.
+                                    const worstScore = filteredHierarchy[filteredHierarchy.length - 1];
+                                    const tScore = TITLES.SUSPECT(isBad(worstScore));
+
+                                    return (
+                                        <>
+                                            <SquadCard title={tDeath.title} member={worstDeath} color={tDeath.color} description={tDeath.desc} subText={`평균 ${worstDeath?.avgDeaths}데스`} />
+                                            <SquadCard title={tEff.title} member={worstEff} color={tEff.color} description={tEff.desc} subText={`딜 효율 ${worstEff?.efficiency}%`} />
+                                            <SquadCard title={tVision.title} member={worstVision} color={tVision.color} description={tVision.desc} subText={`시야 ${worstVision?.avgVision}점`} />
+                                            <SquadCard title={tDmg.title} member={worstDmg} color={tDmg.color} description={tDmg.desc} subText={`평균 딜 ${worstDmg?.avgDmg.toLocaleString()}`} />
+                                            <SquadCard title={tScore.title} member={worstScore} color={tScore.color} description={tScore.desc} subText="최종 평가" />
+                                        </>
+                                    );
+                                })()}
                             </div>
                         </>
                     ) : (
@@ -261,56 +316,100 @@ function SquadAnalysisContent() {
 
                     <div className="container mx-auto px-6 pb-20">
                         <div className="flex flex-col gap-6 max-w-6xl mx-auto">
-                            {commonMatches.map((match) => (
-                                <div key={match.id} className={cn("relative border rounded-2xl overflow-hidden transition-all", match.result === "WIN" ? "bg-[#111] border-blue-500/10 hover:border-blue-500/30" : "bg-red-500/5 border-red-500/10 hover:border-red-500/30")}>
-                                    <div className={cn("px-6 py-2 flex justify-between items-center border-b border-white/5", match.result === "WIN" ? "bg-blue-500/10" : "bg-red-500/10")}>
-                                        <div className="flex items-center gap-4">
-                                            <span className={cn("font-black italic text-sm", match.result === "WIN" ? "text-blue-400" : "text-red-400")}>{match.result === "WIN" ? "VICTORY" : "DEFEAT"}</span>
-                                            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">{match.date}</span>
-                                        </div>
-                                        <div className="text-[10px] text-slate-500 font-black uppercase tracking-widest italic">Squad Performance Report</div>
-                                    </div>
-                                    <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                                        {match.allParticipants.filter(p => squadTargetList.includes(`${p.gameName}#${p.tagLine}`.toUpperCase().replace(/\s/g, ''))).map((p, i) => {
-                                            const currentScore = calculatePositionScore(p.score, (p as any).role || "UNKNOWN", {
-                                                dmg: p.damage,
-                                                vision: (p as any).visionScore || 0,
-                                                deaths: p.deaths
-                                            });
+                            {commonMatches.map((match) => {
+                                // 1. 이 매치에 참여한 스쿼드 멤버들의 점수 계산 및 정렬
+                                const squadPerformances = match.allParticipants
+                                    .filter(p => squadTargetList.includes(`${p.gameName}#${p.tagLine}`.toUpperCase().replace(/\s/g, '')))
+                                    .map(p => ({
+                                        ...p,
+                                        currentScore: calculatePositionScore(p.score, (p as any).role || "UNKNOWN", {
+                                            dmg: p.damage,
+                                            vision: (p as any).visionScore || 0,
+                                            deaths: p.deaths
+                                        })
+                                    }))
+                                    .sort((a, b) => a.currentScore - b.currentScore); // 낮은 점수 순 (0번이 꼴찌)
 
-                                            return (
-                                                <div key={i} className="bg-white/5 rounded-xl p-4 border border-white/5 group/member">
-                                                    <div className="flex items-center gap-3 mb-3">
-                                                        <div className="relative shrink-0">
-                                                            <img src={`https://ddragon.leagueoflegends.com/cdn/15.1.1/img/champion/${p.championName}.png`} className="w-10 h-10 rounded-lg border border-white/10" alt={p.championName} />
-                                                            <div className="absolute -top-1 -right-1 bg-blue-600 text-[8px] font-black px-1 rounded italic text-white shadow-lg">{currentScore}</div>
+                                // 2. 범인 확정 조건
+                                // - 최하위 점수가 90점 미만이고,
+                                // - 1등과 꼴찌의 점수 차이가 25점 이상 벌어질 때만 '범인'으로 지목
+                                const lowestScore = squadPerformances[0]?.currentScore;
+                                const highestScore = squadPerformances[squadPerformances.length - 1]?.currentScore;
+                                const hasSuspect = lowestScore < 90 && (highestScore - lowestScore) >= 25;
+                                const suspectId = hasSuspect ? `${squadPerformances[0].gameName}#${squadPerformances[0].tagLine}` : null;
+
+                                return (
+                                    <div key={match.id} className={cn("relative border rounded-2xl overflow-hidden transition-all", match.result === "WIN" ? "bg-[#111] border-blue-500/10 hover:border-blue-500/30" : "bg-red-500/5 border-red-500/10 hover:border-red-500/30")}>
+                                        <div className={cn("px-6 py-2 flex justify-between items-center border-b border-white/5", match.result === "WIN" ? "bg-blue-500/10" : "bg-red-500/10")}>
+                                            <div className="flex items-center gap-4">
+                                                <span className={cn("font-black italic text-sm", match.result === "WIN" ? "text-blue-400" : "text-red-400")}>{match.result === "WIN" ? "VICTORY" : "DEFEAT"}</span>
+                                                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">{match.date}</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                {hasSuspect && (
+                                                    <div className="flex items-center gap-1 text-orange-500 animate-pulse">
+                                                        <Skull size={12} />
+                                                        <span className="text-[10px] font-black uppercase italic">Suspect Detected</span>
+                                                    </div>
+                                                )}
+                                                <div className="text-[10px] text-slate-500 font-black uppercase tracking-widest italic ml-4">Squad Performance Report</div>
+                                            </div>
+                                        </div>
+
+                                        <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                                            {squadPerformances.map((p, i) => {
+                                                const isSuspect = suspectId === `${p.gameName}#${p.tagLine}`;
+
+                                                return (
+                                                    <div key={i} className={cn(
+                                                        "bg-white/5 rounded-xl p-4 border transition-all relative overflow-hidden",
+                                                        isSuspect ? "border-orange-500/50 bg-orange-500/5 shadow-[inset_0_0_20px_rgba(249,115,22,0.1)]" : "border-white/5"
+                                                    )}>
+                                                        {/* 범인일 경우 배경에 큰 해골 아이콘 살짝 표시 */}
+                                                        {isSuspect && <Skull className="absolute -right-2 -bottom-2 text-orange-500/10" size={60} />}
+
+                                                        <div className="flex items-center gap-3 mb-3 relative z-10">
+                                                            <div className="relative shrink-0">
+                                                                <img src={`https://ddragon.leagueoflegends.com/cdn/15.1.1/img/champion/${p.championName}.png`} className={cn("w-10 h-10 rounded-lg border", isSuspect ? "border-orange-500" : "border-white/10")} alt={p.championName} />
+                                                                <div className={cn(
+                                                                    "absolute -top-1 -right-1 text-[8px] font-black px-1 rounded italic text-white shadow-lg",
+                                                                    isSuspect ? "bg-orange-600" : "bg-blue-600"
+                                                                )}>
+                                                                    {p.currentScore}
+                                                                </div>
+                                                            </div>
+                                                            <div className="min-w-0">
+                                                                <div className={cn("text-xs font-black truncate", isSuspect ? "text-orange-400" : "text-white")}>
+                                                                    {p.gameName}
+                                                                </div>
+                                                                <div className="text-[9px] text-slate-500 font-bold uppercase truncate">{(p as any).role} | {p.championName}</div>
+                                                            </div>
                                                         </div>
-                                                        <div className="min-w-0">
-                                                            <div className="text-xs font-black text-white truncate">{p.gameName}</div>
-                                                            <div className="text-[9px] text-slate-500 font-bold uppercase truncate">{(p as any).role} | {p.championName}</div>
+
+                                                        <div className="space-y-2 pt-2 border-t border-white/5 relative z-10">
+                                                            <div className="flex justify-between items-center"><span className="text-[9px] text-slate-500 font-bold uppercase">KDA</span><span className="text-[10px] text-slate-300 font-mono font-bold">{p.kda}</span></div>
+                                                            <div className="flex justify-between items-center"><span className="text-[9px] text-slate-500 font-bold uppercase flex items-center gap-1"><Eye size={10} /> Vision</span><span className="text-[10px] text-blue-400 font-mono font-bold">{(p as any).visionScore || 0}</span></div>
+                                                        </div>
+
+                                                        <div className="mt-3 relative z-10">
+                                                            <span className={cn(
+                                                                "text-[8px] px-2 py-0.5 rounded-full font-black uppercase block text-center truncate shadow-sm",
+                                                                isSuspect ? "bg-orange-600 text-white animate-bounce" :
+                                                                    p.currentScore >= 135 ? "bg-purple-600 text-white" :
+                                                                        p.currentScore >= 115 ? "bg-blue-600 text-white" :
+                                                                            p.currentScore >= 95 ? "bg-emerald-600 text-white" :
+                                                                                "bg-slate-800 text-slate-400"
+                                                            )}>
+                                                                {isSuspect ? "🚨 이 판의 범인" : p.currentScore >= 135 ? "하드캐리" : p.currentScore >= 115 ? "ACE" : p.currentScore >= 95 ? "1인분" : "버스 승객"}
+                                                            </span>
                                                         </div>
                                                     </div>
-                                                    <div className="space-y-2 pt-2 border-t border-white/5">
-                                                        <div className="flex justify-between items-center"><span className="text-[9px] text-slate-500 font-bold uppercase">KDA</span><span className="text-[10px] text-slate-300 font-mono font-bold">{p.kda}</span></div>
-                                                        <div className="flex justify-between items-center"><span className="text-[9px] text-slate-500 font-bold uppercase flex items-center gap-1"><Eye size={10} /> Vision</span><span className="text-[10px] text-blue-400 font-mono font-bold">{(p as any).visionScore || 0}</span></div>
-                                                    </div>
-                                                    <div className="mt-3">
-                                                        <span className={cn(
-                                                            "text-[8px] px-2 py-0.5 rounded-full font-black uppercase block text-center truncate",
-                                                            currentScore >= 135 ? "bg-purple-600 text-white shadow-[0_0_10px_rgba(147,51,234,0.5)]" :
-                                                                currentScore >= 115 ? "bg-blue-600 text-white" :
-                                                                    currentScore >= 95 ? "bg-emerald-600 text-white" :
-                                                                        "bg-slate-800 text-slate-400"
-                                                        )}>
-                                                            {currentScore >= 135 ? "하드캐리" : currentScore >= 115 ? "ACE" : currentScore >= 95 ? "1인분" : "버스 승객"}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
+                                                );
+                                            })}
+                                        </div>
                                     </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     </div>
                 </>
@@ -331,7 +430,10 @@ function SquadCard({ title, member, color, isVision, subText, description }: any
         stone: "text-stone-500 border-stone-500/50",
         slate: "text-slate-500 border-slate-500/20",
         green: "text-green-500 border-green-500/20",
+        purple: "text-purple-500 border-purple-500/30 shadow-[0_0_20px_-12px_rgba(168,85,247,0.3)]",
     };
+
+    if (!member) return null;
 
     return (
         <div className={cn("bg-[#111] border rounded-[2rem] p-6 transition-all duration-500 hover:scale-[1.02] relative group cursor-help", colorConfigs[color])}>

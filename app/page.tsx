@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, useEffect, useMemo } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, History, X, MessageSquare, Users, CheckCircle2, Zap, Info, ShieldCheck, Target } from "lucide-react";
+import { Search, History, X, MessageSquare, Users, CheckCircle2, Zap, Info, ShieldCheck, Target, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function Home() {
@@ -72,7 +72,6 @@ export default function Home() {
         </h1>
 
         <div className="w-full space-y-12">
-          {/* 1. 개인 검색 섹션 */}
           <section className="w-full">
             <div className="flex items-center gap-3 mb-6">
               <div className="p-2 bg-blue-500/10 rounded-lg"><Target className="text-blue-500" size={20} /></div>
@@ -112,7 +111,6 @@ export default function Home() {
             </div>
           </section>
 
-          {/* 2. 스쿼드 검색 섹션 */}
           <section className="w-full">
             <div className="flex items-center gap-3 mb-6">
               <div className="p-2 bg-purple-500/10 rounded-lg"><Users className="text-purple-500" size={20} /></div>
@@ -139,7 +137,11 @@ export default function Home() {
                 className="w-full h-36 bg-black/40 border border-white/5 rounded-2xl p-5 text-slate-300 text-sm focus:outline-none focus:border-purple-500/30 transition-all placeholder:text-slate-800 resize-none font-mono mb-6 leading-relaxed"
                 value={multiText}
                 onChange={(e) => setMultiText(e.target.value)}
-                placeholder={`금광동 쏘스윗 #KR1 님이 로비에 참가하셨습니다.\n...`}
+                placeholder={`소환사1 #KR1 님이 로비에 참가하셨습니다.
+소환사2 #KR1 님이 로비에 참가하셨습니다.
+소환사3 #KR1 님이 로비에 참가하셨습니다.
+소환사4 #KR1 님이 로비에 참가하셨습니다.
+소환사5 #웰시코기 님이 로비에 참가하셨습니다.`}
               />
 
               {parsedMembers.length > 0 ? (
@@ -169,84 +171,19 @@ export default function Home() {
         </div>
       </div>
 
-      {/* 하단 정보 그리드 */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 relative z-10">
-        <div className="lg:col-span-2 bg-[#111] rounded-[2rem] p-10 border border-white/5 relative overflow-hidden group">
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700"></div>
-          <div className="flex justify-between items-center mb-10 relative z-10">
-            <h3 className="font-black text-3xl flex items-center gap-4 italic text-white tracking-tighter">
-              <div className="w-2.5 h-10 bg-blue-500 skew-x-[-15deg] shadow-[4px_0_15px_rgba(59,130,246,0.5)]" />
-              PATCH 15.1 ANALYSIS
-            </h3>
-            <span className="text-[10px] font-black text-blue-500 bg-blue-500/10 px-4 py-1.5 rounded-full border border-blue-500/20 uppercase tracking-widest">
-              Live Meta
-            </span>
-          </div>
+      {/* 하단 정보 그리드 - 대대적인 디자인 개선 */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-12 relative z-10">
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 relative z-10">
-            <div className="bg-white/[0.03] border border-white/5 rounded-3xl p-8 hover:bg-white/[0.05] transition-colors">
-              <h4 className="text-xs font-black text-slate-500 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
-                <Zap size={18} className="text-yellow-500" /> Champions Update
-              </h4>
-              <ul className="space-y-4">
-                <li className="flex items-center justify-between text-sm border-b border-white/5 pb-3">
-                  <span className="text-slate-200 font-bold italic">Ezreal</span>
-                  <span className="text-green-500 text-[11px] font-black uppercase">+ Buffed</span>
-                </li>
-                <li className="flex items-center justify-between text-sm border-b border-white/5 pb-3">
-                  <span className="text-slate-200 font-bold italic">Karma</span>
-                  <span className="text-red-500 text-[11px] font-black uppercase">- Nerfed</span>
-                </li>
-                <li className="flex items-center justify-between text-sm">
-                  <span className="text-slate-200 font-bold italic">Heartsteel</span>
-                  <span className="text-blue-400 text-[11px] font-black uppercase">Adjusted</span>
-                </li>
-              </ul>
-            </div>
-
-            <div className="bg-white/[0.03] border border-white/5 rounded-3xl p-8 hover:bg-white/[0.05] transition-colors">
-              <h4 className="text-xs font-black text-slate-500 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
-                <Info size={18} className="text-blue-500" /> Current Meta
-              </h4>
-              <p className="text-sm text-slate-400 leading-relaxed font-medium italic mb-6">
-                공허 유충의 가치가 상승하며 상체 위주의 게임이 이어지고 있습니다.
-                오브젝트 교전 능력이 티어를 가르는 핵심입니다.
-              </p>
-              <div className="flex gap-3">
-                <span className="px-3 py-1 bg-blue-500/10 rounded-lg text-[10px] font-black text-blue-400 uppercase border border-blue-500/10">#Top_Meta</span>
-                <span className="px-3 py-1 bg-blue-500/10 rounded-lg text-[10px] font-black text-blue-400 uppercase border border-blue-500/10">#Object_Fight</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-[#111] rounded-[2rem] p-10 border border-white/5">
-          <h3 className="font-black text-2xl mb-10 italic uppercase tracking-tighter flex items-center gap-3 text-white">
-            <Target size={24} className="text-red-500" /> Hot-Picks
-          </h3>
-          <div className="space-y-4">
-            {[
-              { lane: "TOP", champ: "Aatrox", status: "S-Tier", color: "text-red-500" },
-              { lane: "JNG", champ: "Lee Sin", status: "Steady", color: "text-blue-500" },
-              { lane: "MID", champ: "Orianna", status: "OP", color: "text-yellow-500" },
-              { lane: "ADC", champ: "Lucian", status: "Hot", color: "text-orange-500" },
-              { lane: "SUP", champ: "Thresh", status: "S-Tier", color: "text-green-500" },
-            ].map((pick) => (
-              <div key={pick.lane} className="flex items-center justify-between p-4 bg-white/[0.02] rounded-2xl border border-white/5 hover:border-white/10 transition-all group cursor-default">
-                <div className="flex items-center gap-4">
-                  <span className="text-[10px] font-black text-slate-600 group-hover:text-blue-500 transition-colors w-8 italic">{pick.lane}</span>
-                  <div className="w-10 h-10 bg-slate-900 rounded-xl border border-white/5"></div>
-                  <span className="text-sm font-black text-slate-200 italic">{pick.champ}</span>
-                </div>
-                <span className={cn("text-[10px] font-black italic tracking-widest uppercase", pick.color)}>{pick.status}</span>
-              </div>
-            ))}
-          </div>
-          <p className="mt-10 text-[9px] text-slate-700 uppercase tracking-[0.3em] text-center border-t border-white/5 pt-8 font-black">
-            Powered by Winsam Engine
-          </p>
-        </div>
       </div>
     </main>
+  );
+}
+
+// 아이콘 라이브러리에 없는 Skull 추가 정의 (lucide에 있지만 안전을 위해)
+function Skull({ size, className }: { size: number; className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M9 10L9.01 10" /><path d="M15 10L15.01 10" /><path d="M10 20v-3a1 1 0 0 0-1-1H7a1 1 0 0 1-1-1v-2c0-4.42 3.58-8 8-8s8 3.58 8 8v2a1 1 0 0 1-1 1h-2a1 1 0 0 0-1 1v3" /><circle cx="12" cy="12" r="10" />
+    </svg>
   );
 }
