@@ -12,13 +12,20 @@ export interface SquadMemberPerformance {
     gameName: string;
     tagLine: string;
     score: number;
+    // 계산 근거를 저장할 필드 추가
+    breakdown: {
+        base: number;
+        vision: number;
+        dmg: number;
+        deaths: number;
+    };
     kda: string;
     damage: number;
     deaths: number;
     gold: number;
     win: boolean;
     championName: string;
-    visionScore: number; // 시야 점수 타입 추가
+    visionScore: number;
 }
 
 export interface AnalyzedMatch {
@@ -29,6 +36,13 @@ export interface AnalyzedMatch {
     result: "WIN" | "LOSE";
     kda: string;
     score: number;
+    // 메인 분석 결과에도 breakdown 포함
+    breakdown: {
+        base: number;
+        vision: number;
+        dmg: number;
+        deaths: number;
+    };
     date: string;
     tags: Array<{ type: "Vision" | "Dmg" | "Survival" | "KDA"; label: string; color: string; bg: string }>;
     detail: {
@@ -62,31 +76,89 @@ export interface AnalysisResult {
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 /**
- * 인분 점수 계산 공통 로직
+ * 인분 점수 계산 및 상세 내역 반환 로직
  */
-function calculateContributionScore(p: any): number {
-    const kdaValue = p.deaths === 0
-        ? (p.kills + p.assists) * 1.5
+function calculateContributionScore(p: any) {
+    // 1. KDA 기반 기본 점수 (기존 유지)
+    const rawKda = p.deaths === 0
+        ? (p.kills + p.assists) * 1.1
         : (p.kills + p.assists) / p.deaths;
 
-    // 시야 점수(visionScore)를 계산식에 포함
-    let score = Math.floor((kdaValue * 10) + (p.totalDamageDealtToChampions / 1500) + (p.visionScore * 1));
-    if (p.win) score += 20;
+    let baseScore = Math.floor(Math.sqrt(rawKda) * 40);
+    if (p.win) baseScore += 20;
 
-    return score > 160 ? 160 : score;
+    // 2. 포지션별 기여도 보정
+    let visionImpact = 0;
+    let dmgImpact = 0;
+    let tankingImpact = 0;
+    const role = p.teamPosition;
+
+    switch (role) {
+        case "BOTTOM": // 원딜 (가장 강력한 딜 보너스)
+            // [버프] 800딜당 1점 (기존 1000~1200). 3만딜 넣으면 약 +25점
+            dmgImpact = Math.max(0, Math.floor((p.totalDamageDealtToChampions - 10000) / 800));
+            visionImpact = Math.floor((p.visionScore - 10) / 4);
+            break;
+
+        case "MIDDLE": // 미드
+            // [버프] 900딜당 1점. 3만딜 넣으면 약 +22점
+            dmgImpact = Math.max(0, Math.floor((p.totalDamageDealtToChampions - 10000) / 900));
+            visionImpact = Math.floor((p.visionScore - 12) / 3);
+            break;
+
+        case "TOP": // 탑
+            // [버프] 1100딜당 1점 + 탱킹 점수 강화
+            dmgImpact = Math.max(0, Math.floor((p.totalDamageDealtToChampions - 12000) / 1100));
+            visionImpact = Math.floor((p.visionScore - 12) / 4);
+            tankingImpact = p.totalDamageTaken > 15000
+                ? Math.min(25, Math.floor((p.totalDamageTaken - 15000) / 1000)) : 0;
+            break;
+
+        case "JUNGLE": // 정글
+            dmgImpact = Math.max(0, Math.floor((p.totalDamageDealtToChampions - 10000) / 1100));
+            visionImpact = Math.floor((p.visionScore - 15) / 3);
+            break;
+
+        case "UTILITY": // 서포터
+            visionImpact = Math.floor((p.visionScore - 25) / 3);
+            dmgImpact = p.totalDamageDealtToChampions > 8000
+                ? Math.floor((p.totalDamageDealtToChampions - 8000) / 1200) : 0;
+            if (p.assists > 10) dmgImpact += (p.assists - 10) * 1.5;
+            break;
+    }
+
+    // 3. [추가 완화] 데스 페널티 하향
+    // 데스당 감점 폭을 더 줄여서 딜 점수가 데스 감점을 압도하게 만듭니다.
+    let deathPenalty = 0;
+    if (role === "TOP" || role === "UTILITY") {
+        // 탑, 서폿: 데스당 1.5점 (거의 안 깎이는 수준)
+        deathPenalty = Math.floor(p.deaths * 1.5);
+    } else {
+        // 나머지: 데스당 2.5점 (기존 4~6점에서 대폭 하향)
+        deathPenalty = Math.floor(p.deaths * 2.5);
+    }
+
+    const finalScore = baseScore + visionImpact + dmgImpact + tankingImpact - deathPenalty;
+
+    return {
+        score: Math.max(5, Math.min(250, finalScore)),
+        breakdown: {
+            base: baseScore + tankingImpact,
+            vision: visionImpact,
+            dmg: dmgImpact,
+            deaths: -deathPenalty
+        }
+    };
 }
 
 export async function analyzeSummoner(gameName: string, tagLine: string): Promise<AnalysisResult | null> {
     try {
-        // 1. 계정 정보 조회 (PUUID 획득)
         const account = await getAccount(gameName, tagLine);
         if (!account) return null;
 
-        // 2. 소환사 기본 정보 조회
         const summoner = await getSummonerByPuuid(account.puuid);
         if (!summoner) return null;
 
-        // 3. 리그 정보 조회
         let leagues: any[] = [];
         try {
             leagues = await getLeagueEntries(account.puuid) || [];
@@ -113,13 +185,10 @@ export async function analyzeSummoner(gameName: string, tagLine: string): Promis
                 : "0%",
         };
 
-        // 429 에러 방지 딜레이
         await delay(500);
-
         const matchIds = await getMatchIds(account.puuid, 20);
         const matchesRaw = [];
 
-        // 매치 상세 정보 순차 조회
         for (const id of matchIds) {
             const detail = await getMatchDetail(id);
             if (detail) matchesRaw.push(detail);
@@ -136,25 +205,24 @@ export async function analyzeSummoner(gameName: string, tagLine: string): Promis
                 const hoursAgo = Math.floor((now - match.info.gameEndTimestamp) / (1000 * 60 * 60));
                 const dateStr = hoursAgo < 24 ? `${hoursAgo}시간 전` : `${Math.floor(hoursAgo / 24)}일 전`;
 
-                // 해당 매치의 10명 전원 정보 추출 (스쿼드 비교용)
-                const allParticipants: SquadMemberPerformance[] = match.info.participants.map((p: any) => ({
-                    gameName: p.riotIdGameName || p.summonerName,
-                    tagLine: p.riotIdTagline || "KR1",
-                    score: calculateContributionScore(p),
-                    kda: `${p.kills}/${p.deaths}/${p.assists}`,
-                    damage: p.totalDamageDealtToChampions,
-                    deaths: p.deaths,
-                    gold: p.goldEarned,
-                    win: p.win,
-                    championName: p.championName,
-                    visionScore: p.visionScore // 시야 점수 데이터 주입
-                }));
+                const allParticipants: SquadMemberPerformance[] = match.info.participants.map((p: any) => {
+                    const analysis = calculateContributionScore(p);
+                    return {
+                        gameName: p.riotIdGameName || p.summonerName,
+                        tagLine: p.riotIdTagline || "KR1",
+                        score: analysis.score,
+                        breakdown: analysis.breakdown,
+                        kda: `${p.kills}/${p.deaths}/${p.assists}`,
+                        damage: p.totalDamageDealtToChampions,
+                        deaths: p.deaths,
+                        gold: p.goldEarned,
+                        win: p.win,
+                        championName: p.championName,
+                        visionScore: p.visionScore
+                    };
+                });
 
-                const simplifiedParticipants: MatchParticipant[] = match.info.participants.map((p: any) => ({
-                    gameName: p.riotIdGameName || p.summonerName,
-                    tagLine: p.riotIdTagline || "KR1",
-                    championName: p.championName
-                }));
+                const mainAnalysis = calculateContributionScore(participant);
 
                 return {
                     id: match.metadata.matchId,
@@ -167,10 +235,15 @@ export async function analyzeSummoner(gameName: string, tagLine: string): Promis
                                     : participant.teamPosition === "TOP" ? "TOP" : "MID",
                     result: participant.win ? "WIN" : "LOSE",
                     kda: `${participant.kills}/${participant.deaths}/${participant.assists}`,
-                    score: calculateContributionScore(participant),
+                    score: mainAnalysis.score,
+                    breakdown: mainAnalysis.breakdown,
                     date: dateStr,
                     tags: [],
-                    participants: simplifiedParticipants,
+                    participants: match.info.participants.map((p: any) => ({
+                        gameName: p.riotIdGameName || p.summonerName,
+                        tagLine: p.riotIdTagline || "KR1",
+                        championName: p.championName
+                    })),
                     allParticipants: allParticipants,
                     detail: {
                         kills: participant.kills,

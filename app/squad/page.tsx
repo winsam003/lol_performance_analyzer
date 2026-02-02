@@ -5,7 +5,6 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { Loader2, Users, Trophy, TrendingUp, ShieldAlert, CheckCircle2, Search, ArrowLeft, Layers, User, Eye, Skull, Info, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { analyzeSummoner, AnalysisResult } from "../actions/analyze";
-// [추가] 서버 액션 임포트
 import { getSquadAiFeedback } from "../actions/squadAiAnalyze";
 import { Suspense } from "react";
 import Link from "next/link";
@@ -34,32 +33,6 @@ const TITLES = {
         : { title: "숨은 공로자", desc: "기록 이상의 가치를 보여준 멤버", color: "purple" },
 };
 
-const calculatePositionScore = (baseScore: number, role: string, stats: { dmg: number; vision: number; deaths: number }) => {
-    let penalty = 0;
-    let bonus = 0;
-
-    switch (role) {
-        case "SUP":
-            if (stats.vision < 15) penalty += 25;
-            else if (stats.vision < 30) penalty += 10;
-            if (stats.dmg > 18000) bonus += 10;
-            break;
-        case "JNG":
-            if (stats.vision < 12) penalty += 15;
-            break;
-        case "ADC":
-            if (stats.dmg < 15000) penalty += 20;
-            if (stats.deaths > 8) penalty += 15;
-            break;
-        case "TOP":
-        case "MID":
-            if (stats.dmg < 12000) penalty += 15;
-            break;
-    }
-
-    return Math.max(0, baseScore + bonus - penalty);
-};
-
 function SquadAnalysisContent() {
     const searchParams = useSearchParams();
     const summonerParam = searchParams.get("summoner") || "";
@@ -70,7 +43,6 @@ function SquadAnalysisContent() {
     const [data, setData] = useState<AnalysisResult | null>(null);
     const [selectedQueue, setSelectedQueue] = useState("all");
 
-    // [추가] AI 분석 관련 상태
     const [aiReport, setAiReport] = useState<string>("");
     const [isAiAnalyzing, setIsAiAnalyzing] = useState(false);
 
@@ -83,7 +55,6 @@ function SquadAnalysisContent() {
 
     const fetchSquadData = useCallback(async (isRefresh = false) => {
         if (!summonerParam) return;
-
         if (isRefresh) setRefreshing(true);
         else setLoading(true);
 
@@ -91,7 +62,6 @@ function SquadAnalysisContent() {
             const [name, tag] = summonerParam.split("#");
             const result = await analyzeSummoner(name, tag);
             setData(result);
-            // 데이터 새로 불러올 때 이전 리포트 초기화
             setAiReport("");
         } catch (err) {
             console.error(err);
@@ -105,7 +75,6 @@ function SquadAnalysisContent() {
         fetchSquadData();
     }, [fetchSquadData]);
 
-    // [추가] AI 분석 실행 함수
     const handleAiAnalysis = async () => {
         if (filteredHierarchy.length === 0) return;
         setIsAiAnalyzing(true);
@@ -145,17 +114,13 @@ function SquadAnalysisContent() {
                         statsMap[pFullId] = {
                             name: p.gameName, tag: p.tagLine, totalScore: 0, matchCount: 0,
                             deaths: 0, kills: 0, assists: 0, dmg: 0, gold: 0, vision: 0,
-                            role: (p as any).role
+                            role: (p as any).role,
+                            // 서버에서 넘어온 breakdown 누적용 초기화
+                            breakdown: { base: 0, vision: 0, dmg: 0, deaths: 0 }
                         };
                     }
 
-                    const adjustedScore = calculatePositionScore(p.score, (p as any).role || "UNKNOWN", {
-                        dmg: p.damage,
-                        vision: (p as any).visionScore || 0,
-                        deaths: p.deaths
-                    });
-
-                    statsMap[pFullId].totalScore += adjustedScore;
+                    statsMap[pFullId].totalScore += p.score;
                     statsMap[pFullId].matchCount += 1;
                     statsMap[pFullId].deaths += p.deaths;
                     const [k, , a] = p.kda.split('/').map(Number);
@@ -164,11 +129,19 @@ function SquadAnalysisContent() {
                     statsMap[pFullId].dmg += p.damage;
                     statsMap[pFullId].gold += p.gold;
                     statsMap[pFullId].vision += (p as any).visionScore || 0;
+
+                    // 서버에서 계산해온 breakdown 누적
+                    if (p.breakdown) {
+                        statsMap[pFullId].breakdown.base += p.breakdown.base;
+                        statsMap[pFullId].breakdown.vision += p.breakdown.vision;
+                        statsMap[pFullId].breakdown.dmg += p.breakdown.dmg;
+                        statsMap[pFullId].breakdown.deaths += p.breakdown.deaths;
+                    }
                 }
             });
         });
 
-        const result = Object.values(statsMap).map(s => ({
+        const result = Object.values(statsMap).map((s: any) => ({
             ...s,
             avgScore: Math.floor(s.totalScore / s.matchCount),
             avgKDA: `${(s.kills / s.matchCount).toFixed(1)}/${(s.deaths / s.matchCount).toFixed(1)}/${(s.assists / s.matchCount).toFixed(1)}`,
@@ -185,7 +158,7 @@ function SquadAnalysisContent() {
 
     const getIdentity = (m: any, idx: number, total: number) => {
         if (idx === 0) return { label: "신(GOD)", color: "bg-purple-600" };
-        if (m.avgScore >= 100) {
+        if (m.avgScore >= 115) {
             if (idx === total - 1) return { label: "든든한 국밥", color: "bg-blue-800" };
             return { label: "승리의 주역", color: "bg-sky-700" };
         }
@@ -216,12 +189,7 @@ function SquadAnalysisContent() {
                                 </button>
                             ))}
                         </div>
-
-                        <button
-                            onClick={() => fetchSquadData(true)}
-                            disabled={refreshing}
-                            className="bg-white/5 hover:bg-white/10 border border-white/5 p-3 rounded-xl transition-all disabled:opacity-50 group"
-                        >
+                        <button onClick={() => fetchSquadData(true)} disabled={refreshing} className="bg-white/5 hover:bg-white/10 border border-white/5 p-3 rounded-xl transition-all disabled:opacity-50 group">
                             <RefreshCw size={18} className={cn("text-blue-500 transition-all", refreshing && "animate-spin")} />
                         </button>
                     </div>
@@ -233,61 +201,37 @@ function SquadAnalysisContent() {
                             </div>
                             <h1 className="text-5xl md:text-7xl font-black italic tracking-tighter text-white mb-12 uppercase">SQUAD <span className="text-blue-500">HIERARCHY</span></h1>
 
-                            {/* [추가] AI 분석 버튼 및 결과 섹션 */}
                             <div className="flex flex-col items-center mb-12">
-                                <button
-                                    onClick={handleAiAnalysis}
-                                    disabled={isAiAnalyzing || commonMatches.length === 0}
-                                    className="group relative px-10 py-4 bg-[#111] border border-blue-500/30 rounded-2xl font-black italic uppercase tracking-tighter text-white hover:bg-blue-600 transition-all disabled:opacity-50 overflow-hidden shadow-[0_0_20px_rgba(59,130,246,0.2)]"
-                                >
+                                <button onClick={handleAiAnalysis} disabled={isAiAnalyzing || commonMatches.length === 0} className="group relative px-10 py-4 bg-[#111] border border-blue-500/30 rounded-2xl font-black italic uppercase tracking-tighter text-white hover:bg-blue-600 transition-all disabled:opacity-50 overflow-hidden shadow-[0_0_20px_rgba(59,130,246,0.2)]">
                                     <div className="relative z-10 flex items-center gap-3">
-                                        {isAiAnalyzing ? (
-                                            <>
-                                                <RefreshCw className="animate-spin text-blue-400" size={20} />
-                                                <span>분석 중...</span>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <TrendingUp className="text-blue-500 group-hover:text-white" size={20} />
-                                                <span>AI 스쿼드 리포트</span>
-                                            </>
-                                        )}
+                                        {isAiAnalyzing ? <><RefreshCw className="animate-spin text-blue-400" size={20} /><span>분석 중...</span></> : <><TrendingUp className="text-blue-500 group-hover:text-white" size={20} /><span>AI 스쿼드 리포트</span></>}
                                     </div>
                                     <div className="absolute inset-0 bg-gradient-to-r from-blue-600/0 via-blue-600/10 to-blue-600/0 transform translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
                                 </button>
-
                                 {aiReport && (
                                     <div className="mt-8 w-full max-w-4xl p-8 bg-[#0a0a0a] border border-blue-500/20 rounded-[2.5rem] shadow-2xl animate-in slide-in-from-top-4 duration-500 relative overflow-hidden text-left">
-                                        <div className="absolute top-0 right-0 p-4 opacity-5">
-                                            <ShieldAlert size={120} />
-                                        </div>
+                                        <div className="absolute top-0 right-0 p-4 opacity-5"><ShieldAlert size={120} /></div>
                                         <div className="flex items-center gap-3 mb-6">
                                             <div className="w-1.5 h-6 bg-blue-500 rounded-full"></div>
-                                            <h2 className="text-xl font-black italic text-white tracking-widest uppercase text-left">
-                                                Squad Strategy Report
-                                            </h2>
+                                            <h2 className="text-xl font-black italic text-white tracking-widest uppercase text-left">Squad Strategy Report</h2>
                                         </div>
-                                        <p className="text-slate-300 leading-relaxed whitespace-pre-wrap font-medium text-sm md:text-base">
-                                            {aiReport}
-                                        </p>
+                                        <p className="text-slate-300 leading-relaxed whitespace-pre-wrap font-medium text-sm md:text-base">{aiReport}</p>
                                         <div className="mt-6 pt-4 border-t border-white/5 flex justify-end">
-                                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-600 italic">
-                                                AI Strategic Analysis System v2.5
-                                            </span>
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-600 italic">AI Strategic Analysis System v2.5</span>
                                         </div>
                                     </div>
                                 )}
                             </div>
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 max-w-7xl mx-auto">
-                                <SquadCard title="팀의 심장" member={filteredHierarchy[0]} color="blue" description="보정 점수 1위, 포지션 역할을 가장 잘 수행함" />
+                                <SquadCard title="팀의 심장" member={filteredHierarchy[0]} color="blue" description="평균 인분 점수 1위" />
                                 <SquadCard title="가성비 괴물" member={[...filteredHierarchy].sort((a, b) => b.efficiency - a.efficiency)[0]} color="emerald" subText={`효율 ${[...filteredHierarchy].sort((a, b) => b.efficiency - a.efficiency)[0]?.efficiency}%`} description="적은 골드로 엄청난 딜을 뽑아내는 효율 깡패" />
                                 <SquadCard title="학살자" member={[...filteredHierarchy].sort((a, b) => Number(b.avgKills) - Number(a.avgKills))[0]} color="rose" subText={`평균 ${[...filteredHierarchy].sort((a, b) => Number(b.avgKills) - Number(a.avgKills))[0]?.avgKills}킬`} description="킬 결정력이 가장 높은 핵심 공격수" />
                                 <SquadCard title="마더 테레사" member={[...filteredHierarchy].sort((a, b) => Number(b.avgAssists) - Number(a.avgAssists))[0]} color="yellow" subText={`평균 ${[...filteredHierarchy].sort((a, b) => Number(b.avgAssists) - Number(a.avgAssists))[0]?.avgAssists}어시`} description="아군을 돕는 데 가장 헌신적인 멤버" />
                                 <SquadCard title="협곡 등대" member={[...filteredHierarchy].sort((a, b) => Number(b.avgVision) - Number(a.avgVision))[0]} color="cyan" isVision description="시야 장악으로 팀의 생존을 책임짐" />
 
                                 {(() => {
-                                    const isBad = (m: any) => m.avgScore < 95;
+                                    const isBad = (m: any) => m.avgScore < 90;
                                     const worstDeath = [...filteredHierarchy].sort((a, b) => Number(b.avgDeaths) - Number(a.avgDeaths))[0];
                                     const tDeath = TITLES.DEATHS(isBad(worstDeath));
                                     const worstEff = [...filteredHierarchy].sort((a, b) => a.efficiency - b.efficiency)[0];
@@ -331,7 +275,7 @@ function SquadAnalysisContent() {
                                         <th className="px-8 py-5">순위</th>
                                         <th className="px-8 py-5">멤버</th>
                                         <th className="px-8 py-5">게임당 평균 스탯</th>
-                                        <th className="px-8 py-5 text-center">보정 인분 점수</th>
+                                        <th className="px-8 py-5 text-center">평균 인분 점수</th>
                                         <th className="px-8 py-5 text-right">정체성</th>
                                     </tr>
                                 </thead>
@@ -349,7 +293,28 @@ function SquadAnalysisContent() {
                                                         <div className="flex flex-col"><span className="text-[10px] text-slate-500 uppercase font-bold text-blue-400">시야점수</span><span className="text-xs text-blue-200 font-mono">{m.avgVision}</span></div>
                                                     </div>
                                                 </td>
-                                                <td className="px-8 py-6 text-center"><span className={cn("text-2xl font-black italic", idx === 0 ? "text-blue-500" : "text-slate-400")}>{m.avgScore}</span></td>
+                                                <td className="px-8 py-6 text-center">
+                                                    <div className="flex flex-col items-center">
+                                                        <span className={cn("text-2xl font-black italic", idx === 0 ? "text-blue-500" : "text-slate-400")}>
+                                                            {m.avgScore}
+                                                        </span>
+                                                        {/* 서버에서 온 breakdown을 평균내어 상세 표시 */}
+                                                        {m.breakdown && (
+                                                            <div className="text-[9px] text-slate-500 font-mono mt-1 flex gap-1 bg-white/5 px-2 py-0.5 rounded-full">
+                                                                <span className="text-slate-400">기본 {Math.floor(m.breakdown.base / m.matchCount)}</span>
+                                                                <span className={m.breakdown.vision >= 0 ? "text-blue-400" : "text-red-400"}>
+                                                                    {m.breakdown.vision >= 0 ? "+" : ""}{Math.floor(m.breakdown.vision / m.matchCount)}시야
+                                                                </span>
+                                                                <span className={m.breakdown.dmg >= 0 ? "text-emerald-400" : "text-red-400"}>
+                                                                    {m.breakdown.dmg >= 0 ? "+" : ""}{Math.floor(m.breakdown.dmg / m.matchCount)}딜
+                                                                </span>
+                                                                <span className="text-red-400">
+                                                                    {Math.floor(m.breakdown.deaths / m.matchCount)}데스
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </td>
                                                 <td className="px-8 py-6 text-right">
                                                     <span className={cn("text-[10px] px-3 py-1 rounded-full font-black uppercase tracking-tighter text-white", iden.color)}>
                                                         {iden.label}
@@ -368,19 +333,11 @@ function SquadAnalysisContent() {
                             {commonMatches.map((match) => {
                                 const squadPerformances = match.allParticipants
                                     .filter(p => squadTargetList.includes(`${p.gameName}#${p.tagLine}`.toUpperCase().replace(/\s/g, '')))
-                                    .map(p => ({
-                                        ...p,
-                                        currentScore: calculatePositionScore(p.score, (p as any).role || "UNKNOWN", {
-                                            dmg: p.damage,
-                                            vision: (p as any).visionScore || 0,
-                                            deaths: p.deaths
-                                        })
-                                    }))
-                                    .sort((a, b) => a.currentScore - b.currentScore);
+                                    .sort((a, b) => a.score - b.score);
 
-                                const lowestScore = squadPerformances[0]?.currentScore;
-                                const highestScore = squadPerformances[squadPerformances.length - 1]?.currentScore;
-                                const hasSuspect = lowestScore < 90 && (highestScore - lowestScore) >= 25;
+                                const lowestScore = squadPerformances[0]?.score;
+                                const highestScore = squadPerformances[squadPerformances.length - 1]?.score;
+                                const hasSuspect = lowestScore < 85 && (highestScore - lowestScore) >= 30;
                                 const suspectId = hasSuspect ? `${squadPerformances[0].gameName}#${squadPerformances[0].tagLine}` : null;
 
                                 return (
@@ -390,15 +347,7 @@ function SquadAnalysisContent() {
                                                 <span className={cn("font-black italic text-sm", match.result === "WIN" ? "text-blue-400" : "text-red-400")}>{match.result === "WIN" ? "VICTORY" : "DEFEAT"}</span>
                                                 <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">{match.date}</span>
                                             </div>
-                                            <div className="flex items-center gap-2">
-                                                {hasSuspect && (
-                                                    <div className="flex items-center gap-1 text-orange-500 animate-pulse">
-                                                        <Skull size={12} />
-                                                        <span className="text-[10px] font-black uppercase italic">Suspect Detected</span>
-                                                    </div>
-                                                )}
-                                                <div className="text-[10px] text-slate-500 font-black uppercase tracking-widest italic ml-4">Squad Performance Report</div>
-                                            </div>
+                                            <div className="text-[10px] text-slate-500 font-black uppercase tracking-widest italic ml-4">Squad Performance Report</div>
                                         </div>
 
                                         <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -417,30 +366,30 @@ function SquadAnalysisContent() {
                                                                     "absolute -top-1 -right-1 text-[8px] font-black px-1 rounded italic text-white shadow-lg",
                                                                     isSuspect ? "bg-orange-600" : "bg-blue-600"
                                                                 )}>
-                                                                    {p.currentScore}
+                                                                    {p.score}
                                                                 </div>
                                                             </div>
                                                             <div className="min-w-0">
                                                                 <div className={cn("text-xs font-black truncate", isSuspect ? "text-orange-400" : "text-white")}>
                                                                     {p.gameName}
                                                                 </div>
-                                                                <div className="text-[9px] text-slate-500 font-bold uppercase truncate">{(p as any).role} | {p.championName}</div>
+                                                                <div className="text-[9px] text-slate-500 font-bold uppercase truncate">{(p as any).role || ""} {p.championName}</div>
                                                             </div>
                                                         </div>
                                                         <div className="space-y-2 pt-2 border-t border-white/5 relative z-10">
                                                             <div className="flex justify-between items-center"><span className="text-[9px] text-slate-500 font-bold uppercase">KDA</span><span className="text-[10px] text-slate-300 font-mono font-bold">{p.kda}</span></div>
-                                                            <div className="flex justify-between items-center"><span className="text-[9px] text-slate-500 font-bold uppercase flex items-center gap-1"><Eye size={10} /> Vision</span><span className="text-[10px] text-blue-400 font-mono font-bold">{(p as any).visionScore || 0}</span></div>
+                                                            <div className="flex justify-between items-center"><span className="text-[9px] text-slate-500 font-bold uppercase flex items-center gap-1"><Eye size={10} /> Vision</span><span className="text-[10px] text-blue-400 font-mono font-bold">{p.visionScore || 0}</span></div>
                                                         </div>
                                                         <div className="mt-3 relative z-10">
                                                             <span className={cn(
                                                                 "text-[8px] px-2 py-0.5 rounded-full font-black uppercase block text-center truncate shadow-sm",
                                                                 isSuspect ? "bg-orange-600 text-white animate-bounce" :
-                                                                    p.currentScore >= 135 ? "bg-purple-600 text-white" :
-                                                                        p.currentScore >= 115 ? "bg-blue-600 text-white" :
-                                                                            p.currentScore >= 95 ? "bg-emerald-600 text-white" :
+                                                                    p.score >= 135 ? "bg-purple-600 text-white" :
+                                                                        p.score >= 115 ? "bg-blue-600 text-white" :
+                                                                            p.score >= 95 ? "bg-emerald-600 text-white" :
                                                                                 "bg-slate-800 text-slate-400"
                                                             )}>
-                                                                {isSuspect ? "🚨 이 판의 범인" : p.currentScore >= 135 ? "하드캐리" : p.currentScore >= 115 ? "ACE" : p.currentScore >= 95 ? "1인분" : "버스 승객"}
+                                                                {isSuspect ? "🚨 이 판의 범인" : p.score >= 135 ? "하드캐리" : p.score >= 115 ? "ACE" : p.score >= 95 ? "1인분" : "버스 승객"}
                                                             </span>
                                                         </div>
                                                     </div>
