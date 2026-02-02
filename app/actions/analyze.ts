@@ -213,6 +213,15 @@ export async function analyzeSummoner(gameName: string, tagLine: string): Promis
                         score: analysis.score,
                         breakdown: analysis.breakdown,
                         kda: `${p.kills}/${p.deaths}/${p.assists}`,
+                        // --- 아이템 데이터 추가 ---
+                        item0: p.item0,
+                        item1: p.item1,
+                        item2: p.item2,
+                        item3: p.item3,
+                        item4: p.item4,
+                        item5: p.item5,
+                        item6: p.item6,
+                        // -----------------------
                         damage: p.totalDamageDealtToChampions,
                         deaths: p.deaths,
                         gold: p.goldEarned,
