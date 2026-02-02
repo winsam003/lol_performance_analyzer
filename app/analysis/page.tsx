@@ -60,7 +60,6 @@ function AnalysisContent() {
     const [selectedQueue, setSelectedQueue] = useState("all");
     const [expandedMatchId, setExpandedMatchId] = useState<string | null>(null);
 
-    // AI 개별 상태 관리
     const [matchAiFeedbacks, setMatchAiFeedbacks] = useState<Record<string, string>>({});
     const [matchAiLoading, setMatchAiLoading] = useState<Record<string, boolean>>({});
 
@@ -78,27 +77,25 @@ function AnalysisContent() {
         finally { setLoading(false); }
     };
 
-    // 개별 매치 AI 분석 핸들러
     const handleSingleMatchAiAnalysis = async (e: React.MouseEvent, match: AnalyzedMatch) => {
-        e.stopPropagation(); // 카드 클릭 이벤트 전파 방지
+        e.stopPropagation();
         if (matchAiFeedbacks[match.id]) {
-            setExpandedMatchId(prev => prev === match.id ? null : match.id);
+            setExpandedMatchId(expandedMatchId === match.id ? null : match.id);
             return;
         }
-
+        setExpandedMatchId(match.id);
         setMatchAiLoading(prev => ({ ...prev, [match.id]: true }));
         try {
             const feedback = await getAiMatchFeedback([match], data?.profile.name || "");
             setMatchAiFeedbacks(prev => ({ ...prev, [match.id]: feedback }));
-            setExpandedMatchId(match.id); // 분석 완료 시 자동으로 펼치기
         } catch (err) {
-            console.error("AI 분석 실패:", err);
+            console.error(err);
+            setMatchAiFeedbacks(prev => ({ ...prev, [match.id]: "분석 에러가 발생했습니다." }));
         } finally {
             setMatchAiLoading(prev => ({ ...prev, [match.id]: false }));
         }
     };
 
-    // 스쿼드 분석(TEAM SCAN) 핸들러
     const handleTeamScan = (e: React.MouseEvent, match: any) => {
         e.stopPropagation();
         const teamParticipants = match.allParticipants.filter((p: any) => p.win === (match.result === "WIN"));
@@ -147,13 +144,13 @@ function AnalysisContent() {
 
     const getDynamicTags = (match: any) => {
         const tags = match.tags ? [...match.tags] : [];
-        const kdaArr = match.kda?.split('/') || [0, 0, 0];
+        const kdaArr = (match.kda || "0/0/0").split('/');
         const k = Number(kdaArr[0]);
         const d = Number(kdaArr[1]);
         const a = Number(kdaArr[2]);
         const kdaRatio = d === 0 ? k + a : (k + a) / d;
-        const damage = match.damage ?? 0;
-        const vision = match.visionScore ?? 0;
+        const damage = match.detail?.totalDamageDealtToChampions ?? 0;
+        const vision = match.detail?.visionScore ?? 0;
         const score = match.score ?? 0;
 
         if (kdaRatio >= 8) tags.push({ type: "KDA", label: "불사신", color: "text-yellow-500", bg: "bg-yellow-500/20" });
@@ -194,10 +191,11 @@ function AnalysisContent() {
         return acc;
     }, {} as Record<string, number>);
 
+    // 타입 에러 수정됨: m.detail 객체 내부 값 참조
     const avgs = {
-        dmg: Math.floor(filteredMatches.reduce((acc, m) => acc + (m.damage ?? 0), 0) / (filteredMatches.length || 1)) || 0,
-        vision: (filteredMatches.reduce((acc, m) => acc + (m.visionScore ?? 0), 0) / (filteredMatches.length || 1)).toFixed(1) || "0",
-        deaths: (filteredMatches.reduce((acc, m) => acc + (Number(m.kda?.split('/')[1]) || 0), 0) / (filteredMatches.length || 1)).toFixed(1) || "0"
+        dmg: Math.floor(filteredMatches.reduce((acc, m) => acc + (m.detail.totalDamageDealtToChampions ?? 0), 0) / (filteredMatches.length || 1)) || 0,
+        vision: (filteredMatches.reduce((acc, m) => acc + (m.detail.visionScore ?? 0), 0) / (filteredMatches.length || 1)).toFixed(1) || "0",
+        deaths: (filteredMatches.reduce((acc, m) => acc + (m.detail.deaths ?? 0), 0) / (filteredMatches.length || 1)).toFixed(1) || "0"
     };
 
     return (
@@ -303,7 +301,6 @@ function AnalysisContent() {
                             const isExpanded = expandedMatchId === match.id;
                             const dynamicTags = getDynamicTags(match);
                             const champImg = match.champion === "Mel" ? "Mel" : match.champion;
-
                             const isAiLoading = matchAiLoading[match.id];
                             const currentAiFeedback = matchAiFeedbacks[match.id];
 
@@ -381,7 +378,6 @@ function AnalysisContent() {
                                             </div>
                                         </div>
                                     </div>
-                                    {/* 5:5 팀 상세 정보 섹션 */}
                                     {isExpanded && (
                                         <div className={cn(
                                             "border border-t-0 rounded-b-xl overflow-hidden animate-in slide-in-from-top-2 duration-200",
@@ -398,6 +394,12 @@ function AnalysisContent() {
                                                     </p>
                                                 </div>
                                             )}
+                                            {isAiLoading && !currentAiFeedback && (
+                                                <div className="py-8 flex flex-col items-center justify-center gap-3">
+                                                    <Loader2 className="animate-spin text-indigo-500" size={24} />
+                                                    <p className="text-[10px] font-bold text-slate-500 uppercase italic animate-pulse">AI is decoding battle logs...</p>
+                                                </div>
+                                            )}
                                             <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-6">
                                                 {[true, false].map((isWinGroup) => (
                                                     <div key={isWinGroup ? "win" : "loss"} className="space-y-2">
@@ -408,19 +410,13 @@ function AnalysisContent() {
                                                         {match.allParticipants
                                                             ?.filter((p: any) => p.win === isWinGroup || p.win === (isWinGroup ? "true" : "false"))
                                                             .map((p: any, idx: number) => {
-                                                                // 1. KDA 및 기본 수치 (콘솔 데이터 구조 기준)
                                                                 const kdaArr = p.kda?.split('/') || [0, 0, 0];
                                                                 const k = Number(kdaArr[0]);
                                                                 const d = Number(kdaArr[1]);
                                                                 const a = Number(kdaArr[2]);
-
                                                                 const dmg = p.damage ?? 0;
                                                                 const gold = p.gold ?? 0;
-
-                                                                // 2. 아이템 배열 구성 (콘솔에 찍힌 p.item0 ~ p.item5 직접 참조)
                                                                 const finalItems = [p.item0, p.item1, p.item2, p.item3, p.item4, p.item5];
-
-                                                                // 3. 칭호 생성
                                                                 const pTags = getDynamicTags({
                                                                     ...p,
                                                                     detail: { kills: k, deaths: d, assists: a, totalDamageDealtToChampions: dmg, visionScore: p.visionScore ?? 0 }
@@ -456,7 +452,6 @@ function AnalysisContent() {
                                                                             </div>
                                                                         </div>
 
-                                                                        {/* 아이템 슬롯 */}
                                                                         <div className="flex gap-0.5 shrink-0">
                                                                             {finalItems.map((itemId, i) => {
                                                                                 const id = Number(itemId);
@@ -469,7 +464,6 @@ function AnalysisContent() {
                                                                                                 className="w-full h-full object-cover"
                                                                                                 alt=""
                                                                                                 onError={(e) => {
-                                                                                                    // 15.1.1 실패 시 14.24.1 시도
                                                                                                     e.currentTarget.src = `https://ddragon.leagueoflegends.com/cdn/14.24.1/img/item/${id}.png`;
                                                                                                 }}
                                                                                             />
@@ -498,7 +492,6 @@ function AnalysisContent() {
     );
 }
 
-// StatBox는 기존과 동일
 function StatBox({ icon, label, value, sub, color, bg }: { icon: React.ReactNode; label: string; value: string; sub: string; color: string; bg: string }) {
     return (
         <div className="bg-[#161616] p-6 rounded-2xl border border-white/5 flex flex-col gap-4">
