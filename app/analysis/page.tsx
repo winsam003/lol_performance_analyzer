@@ -1,12 +1,14 @@
 "use client";
 
+import React from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useState, useEffect, useMemo } from "react";
-import { Search, Trophy, Disc, Target, Eye, Shield, Sword, Star, Info, Loader2, Layers, User, Users, Zap, Coffee } from "lucide-react";
+import { Search, Trophy, Disc, Target, Eye, Shield, Sword, Star, Info, Loader2, Layers, User, Users, Zap, Coffee, BarChart3, BrainCircuit, Sparkles, MessageSquareWarning } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { analyzeSummoner, AnalysisResult, AnalyzedMatch } from "../actions/analyze";
+import { getAiMatchFeedback } from "../actions/aiAnalyze"; // AI 액션 추가
 import { Suspense } from "react";
 
 const QUEUES = [
@@ -50,33 +52,51 @@ const SCORE_GUIDE = [
 function AnalysisContent() {
     const searchParams = useSearchParams();
     const router = useRouter();
-    const initialSummoner = searchParams.get("summoner") || "Hide on bush#KR1";
+    const initialSummoner = searchParams.get("summoner") || "";
 
     const [searchTerm, setSearchTerm] = useState(initialSummoner);
     const [data, setData] = useState<AnalysisResult | null>(null);
     const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
     const [selectedQueue, setSelectedQueue] = useState("all");
 
+    // AI 상태 추가
+    const [aiFeedback, setAiFeedback] = useState<string | null>(null);
+    const [aiLoading, setAiLoading] = useState(false);
+
     const fetchData = async (query: string) => {
+        if (!query) return;
         const finalQuery = query.includes("#") ? query : `${query}#KR1`;
         const [gameName, tagLine] = finalQuery.split("#");
 
-        // 검색 시 URL 업데이트
         router.push(`/analysis?summoner=${encodeURIComponent(finalQuery)}`);
 
         setLoading(true);
-        setError(null);
+        setAiFeedback(null);
         try {
             const result = await analyzeSummoner(gameName, tagLine);
-            if (!result) { setError("결과가 없습니다."); }
-            else { setData(result); }
-        } catch (err) { console.error(err); setError("에러 발생"); }
+            if (result) { setData(result); }
+        } catch (err) { console.error(err); }
         finally { setLoading(false); }
+    };
+
+    const handleAiAnalysis = async () => {
+        if (!data || data.matches.length === 0) return;
+        setAiLoading(true);
+        const feedback = await getAiMatchFeedback(data.matches, data.profile.name);
+        setAiFeedback(feedback);
+        setAiLoading(false);
     };
 
     useEffect(() => { if (initialSummoner) fetchData(initialSummoner); }, [initialSummoner]);
     const handleSearch = () => fetchData(searchTerm);
+
+    const handleTeamScan = (match: any) => {
+        const teamParticipants = match.allParticipants.filter((p: any) => p.win === (match.result === "WIN"));
+        if (teamParticipants.length === 0) return;
+        const main = `${teamParticipants[0].gameName}#${teamParticipants[0].tagLine}`;
+        const squad = teamParticipants.slice(1).map((m: any) => `${m.gameName}#${m.tagLine}`).join(',');
+        router.push(`/squad?summoner=${encodeURIComponent(main)}&squad=${encodeURIComponent(squad)}`);
+    };
 
     const filteredMatches = useMemo(() => {
         if (!data) return [];
@@ -136,37 +156,17 @@ function AnalysisContent() {
         return (
             <main className="min-h-screen bg-[#0a0a0a] text-slate-200 flex flex-col items-center justify-center">
                 <Loader2 className="animate-spin text-blue-500 mb-4" size={48} />
-                <h2 className="text-xl font-bold animate-pulse">전적 분석 중...</h2>
+                <h2 className="text-xl font-bold animate-pulse uppercase italic tracking-tighter">Analyzing Combat Data...</h2>
             </main>
         );
     }
 
-    if (!data) {
-        return (
-            <main className="min-h-screen bg-[#0a0a0a] text-slate-200 flex items-center justify-center">
-                <div className="flex flex-col items-center gap-4">
-                    <Input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="소환사명 #태그" className="w-80 bg-black/40 border-white/10" onKeyDown={(e) => e.key === "Enter" && handleSearch()} />
-                    <Button onClick={handleSearch} className="bg-blue-600 hover:bg-blue-500">검색</Button>
-                </div>
-            </main>
-        )
-    }
+    if (!data) return null;
 
     const { profile } = data;
     const totalScore = filteredMatches.reduce((acc, curr) => acc + curr.score, 0);
     const averageScore = filteredMatches.length > 0 ? Math.floor(totalScore / filteredMatches.length) : 0;
     const tier = getTier(averageScore);
-
-    const roleStats = filteredMatches.reduce((acc, match) => {
-        if (!acc[match.role]) acc[match.role] = { count: 0, totalScore: 0, k: 0, d: 0, a: 0 };
-        const [k, d, a] = match.kda.split('/').map(Number);
-        acc[match.role].count += 1;
-        acc[match.role].totalScore += match.score;
-        acc[match.role].k += k;
-        acc[match.role].d += d;
-        acc[match.role].a += a;
-        return acc;
-    }, {} as Record<string, { count: number, totalScore: number, k: number, d: number, a: number }>);
 
     const tagCounts = filteredMatches.reduce((acc, match) => {
         const dynamicTags = getDynamicTags(match);
@@ -178,18 +178,18 @@ function AnalysisContent() {
     }, {} as Record<string, number>);
 
     const avgs = {
-        dmg: Math.floor(filteredMatches.reduce((acc, m) => acc + m.detail.totalDamageDealtToChampions, 0) / filteredMatches.length) || 0,
-        vision: (filteredMatches.reduce((acc, m) => acc + m.detail.visionScore, 0) / filteredMatches.length).toFixed(1) || "0",
-        deaths: (filteredMatches.reduce((acc, m) => acc + m.detail.deaths, 0) / filteredMatches.length).toFixed(1) || "0"
+        dmg: Math.floor(filteredMatches.reduce((acc, m) => acc + m.detail.totalDamageDealtToChampions, 0) / (filteredMatches.length || 1)) || 0,
+        vision: (filteredMatches.reduce((acc, m) => acc + m.detail.visionScore, 0) / (filteredMatches.length || 1)).toFixed(1) || "0",
+        deaths: (filteredMatches.reduce((acc, m) => acc + m.detail.deaths, 0) / (filteredMatches.length || 1)).toFixed(1) || "0"
     };
 
     return (
         <main className="min-h-screen bg-[#0a0a0a] text-slate-200">
             <div className="border-b border-white/5 bg-[#111] sticky top-0 z-[100] backdrop-blur-md bg-opacity-80 px-6 py-4">
                 <div className="container mx-auto flex justify-between items-center text-slate-100 italic tracking-tighter font-black text-xl">
-                    <h1>WHO <span className="text-blue-500">CARRIED?</span></h1>
+                    <h1 className="cursor-pointer" onClick={() => router.push('/')}>WHO <span className="text-blue-500">CARRIED?</span></h1>
                     <div className="flex gap-2 shrink-0">
-                        <Input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="소환사명 #태그" className="w-48 md:w-80 bg-black/40 border-white/10" onKeyDown={(e) => e.key === "Enter" && handleSearch()} />
+                        <Input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="소환사명 #태그" className="w-48 md:w-80 bg-black/40 border-white/10 text-sm" onKeyDown={(e) => e.key === "Enter" && handleSearch()} />
                         <Button size="sm" onClick={handleSearch} disabled={loading} className="bg-blue-600 hover:bg-blue-500 font-bold italic">
                             {loading ? <Loader2 className="animate-spin w-4 h-4" /> : "검색"}
                         </Button>
@@ -198,12 +198,23 @@ function AnalysisContent() {
             </div>
 
             <div className="container mx-auto px-6 py-12">
-                <div className="flex bg-[#161616] p-1 rounded-xl border border-white/5 w-fit mb-8">
-                    {QUEUES.map((q) => (
-                        <button key={q.id} onClick={() => setSelectedQueue(q.id)} className={cn("flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all", selectedQueue === q.id ? "bg-blue-600 text-white" : "text-slate-500 hover:text-slate-300")}>
-                            {q.icon} {q.label}
-                        </button>
-                    ))}
+                <div className="flex items-center gap-4 mb-8">
+                    <div className="flex bg-[#161616] p-1 rounded-xl border border-white/5 w-fit">
+                        {QUEUES.map((q) => (
+                            <button key={q.id} onClick={() => setSelectedQueue(q.id)} className={cn("flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all", selectedQueue === q.id ? "bg-blue-600 text-white" : "text-slate-500 hover:text-slate-300")}>
+                                {q.icon} {q.label}
+                            </button>
+                        ))}
+                    </div>
+                    {/* AI 서치 버튼 */}
+                    <Button
+                        onClick={handleAiAnalysis}
+                        disabled={aiLoading}
+                        className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 font-black italic text-xs px-6 py-5 rounded-xl border border-white/10 shadow-[0_0_20px_rgba(37,99,235,0.2)]"
+                    >
+                        {aiLoading ? <Loader2 className="animate-spin mr-2" size={14} /> : <BrainCircuit className="mr-2" size={14} />}
+                        AI코치 매치 정밀분석
+                    </Button>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
@@ -212,7 +223,7 @@ function AnalysisContent() {
                             <div className="absolute top-0 right-0 p-32 bg-blue-500/5 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none"></div>
                             <div className="relative z-10 flex flex-col items-center text-center">
                                 <div className="w-24 h-24 rounded-3xl bg-slate-800 mb-6 border-4 border-[#1a1a1a] shadow-2xl overflow-hidden relative">
-                                    <img src={`https://ddragon.leagueoflegends.com/cdn/15.1.1/img/profileicon/${profile.iconId}.png`} alt="Icon" className="w-full h-full object-cover" onError={(e) => (e.currentTarget.src = "https://ddragon.leagueoflegends.com/cdn/15.1.1/img/profileicon/29.png")} />
+                                    <img src={`https://ddragon.leagueoflegends.com/cdn/15.1.1/img/profileicon/${profile.iconId}.png`} alt="Icon" className="w-full h-full object-cover" />
                                 </div>
                                 <h2 className="text-2xl font-bold text-white mb-2">{profile.name} <span className="text-slate-500 text-lg font-normal">#{profile.tag}</span></h2>
                                 <div className="inline-flex items-center gap-2 px-3 py-1 bg-slate-800/50 rounded-full border border-white/5 text-xs font-bold text-slate-400 mb-6 uppercase tracking-wider">
@@ -224,6 +235,38 @@ function AnalysisContent() {
                                     <div className="text-center border-l border-white/5"><div className="text-[10px] text-slate-500 mb-1 uppercase font-bold tracking-widest">게임 수</div><div className="text-xl font-bold text-slate-200">{filteredMatches.length}</div></div>
                                 </div>
                             </div>
+                        </div>
+
+                        {/* Gemini AI 분석 섹션 */}
+                        <div className="bg-[#161616] border border-blue-500/20 rounded-3xl p-6 relative overflow-hidden group">
+                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-600 to-indigo-600 opacity-50"></div>
+                            <h4 className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-4 flex items-center gap-2 italic">
+                                <Sparkles size={14} /> AI Deep Verdict
+                            </h4>
+                            {aiLoading ? (
+                                <div className="py-12 flex flex-col items-center justify-center gap-4">
+                                    <div className="relative">
+                                        <Loader2 size={32} className="animate-spin text-blue-500" />
+                                        <BrainCircuit size={16} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-blue-400" />
+                                    </div>
+                                    <p className="text-[10px] font-black text-slate-500 uppercase italic animate-pulse">AI코치가 소환사님의 20매치를 분석하고있습니다...</p>
+                                </div>
+                            ) : aiFeedback ? (
+                                <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-500">
+                                    <p className="text-sm text-slate-300 leading-relaxed font-medium italic whitespace-pre-wrap">
+                                        {aiFeedback}
+                                    </p>
+                                    <div className="pt-4 border-t border-white/5 flex items-center justify-between">
+                                        <span className="text-[9px] text-slate-600 font-black uppercase tracking-tighter italic">Analyzed by Gemini 1.5 Flash</span>
+                                        <MessageSquareWarning size={12} className="text-slate-700" />
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="py-8 text-center flex flex-col items-center gap-3">
+                                    <BrainCircuit size={24} className="text-slate-700" />
+                                    <p className="text-xs text-slate-600 italic">상단의 분석 버튼을 눌러보세요.</p>
+                                </div>
+                            )}
                         </div>
 
                         <div className="bg-[#161616] p-5 rounded-3xl border border-white/5">
@@ -289,90 +332,74 @@ function AnalysisContent() {
                         </div>
                     </div>
 
-                    <div className="lg:col-span-2 space-y-8">
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="lg:col-span-2 space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                             <StatBox icon={<Sword size={20} />} label="교전 능력" value={avgs.dmg > 25000 ? "S+" : "A"} sub={`평균 딜량 ${avgs.dmg.toLocaleString()}`} color="text-red-500" bg="bg-red-500/10" />
                             <StatBox icon={<Eye size={20} />} label="시야 장악" value={Number(avgs.vision) > 30 ? "S" : "A"} sub={`평균 시야점수 ${avgs.vision}`} color="text-blue-500" bg="bg-blue-500/10" />
                             <StatBox icon={<Shield size={20} />} label="생존력" value={Number(avgs.deaths) < 4 ? "S" : "A"} sub={`평균 데스 ${avgs.deaths}`} color="text-green-500" bg="bg-green-500/10" />
                         </div>
 
-                        <div className="flex flex-col gap-3">
-                            {filteredMatches.map((match) => {
-                                const dynamicTags = getDynamicTags(match);
-                                const champImg = match.champion === "Mel" ? "Mel" : match.champion;
-                                return (
-                                    <div key={match.id} className={cn("relative border rounded-xl p-4 flex flex-wrap md:flex-nowrap items-center gap-4 transition-all z-10 hover:z-50", match.result === "WIN" ? "bg-[#131313] border-white/5 hover:border-blue-500/30" : "bg-red-500/5 border-red-500/10 hover:border-red-500/30")}>
-                                        <div className={cn("absolute left-0 top-0 bottom-0 w-1", match.result === "WIN" ? "bg-blue-500" : "bg-red-500")}></div>
-                                        <div className="flex flex-col w-20 pl-2 shrink-0">
-                                            <span className={cn("font-bold text-xs", match.result === "WIN" ? "text-blue-400" : "text-red-400")}>{match.result === "WIN" ? "승리" : "패배"}</span>
-                                            <span className="text-[10px] text-slate-600">{match.date}</span>
-                                        </div>
-                                        <div className="flex items-center gap-3 w-36 shrink-0">
-                                            <div className="w-10 h-10 rounded-full bg-slate-800 overflow-hidden border border-white/10 shrink-0">
-                                                <img
-                                                    src={`https://ddragon.leagueoflegends.com/cdn/15.1.1/img/champion/${champImg}.png`}
-                                                    alt={match.champion}
-                                                    className="w-full h-full object-cover scale-110"
-                                                    onError={(e) => {
-                                                        e.currentTarget.src = "https://ddragon.leagueoflegends.com/cdn/img/champion/tiles/Mel_0.jpg";
-                                                        e.currentTarget.onerror = () => e.currentTarget.src = "https://ddragon.leagueoflegends.com/cdn/15.1.1/img/profileicon/29.png";
-                                                    }}
-                                                />
-                                            </div>
-                                            <div className="flex flex-col truncate">
-                                                <span className="font-bold text-sm text-slate-200">{match.champion}</span>
-                                                <span className="text-[10px] text-slate-500 font-bold uppercase">{match.role}</span>
-                                            </div>
-                                        </div>
-                                        <div className="flex flex-col w-24 shrink-0">
-                                            <span className="text-sm font-medium text-slate-300">{match.kda}</span>
-                                            <span className="text-[10px] text-slate-600 tracking-tighter italic">KDA Score</span>
-                                        </div>
+                        {filteredMatches.map((match) => {
+                            const dynamicTags = getDynamicTags(match);
+                            const champImg = match.champion === "Mel" ? "Mel" : match.champion;
+                            return (
+                                <div key={match.id} className={cn("relative border rounded-xl p-4 flex flex-wrap md:flex-nowrap items-center gap-4 transition-all z-10 hover:z-50", match.result === "WIN" ? "bg-[#131313] border-white/5 hover:border-blue-500/30" : "bg-red-500/5 border-red-500/10 hover:border-red-500/30")}>
+                                    <div className={cn("absolute left-0 top-0 bottom-0 w-1", match.result === "WIN" ? "bg-blue-500" : "bg-red-500")}></div>
 
-                                        <div className="flex-1 flex justify-end items-center gap-4 min-w-0">
-                                            <div className="flex flex-wrap justify-end gap-1.5 max-w-[200px]">
-                                                {dynamicTags.map((tag, idx) => (
-                                                    <div key={idx} className="group/tag relative">
-                                                        <span className={cn("cursor-help text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider transition-colors", tag.bg, tag.color, "hover:brightness-125")}>
-                                                            {tag.label}
-                                                        </span>
-                                                        <div className="absolute bottom-full right-0 mb-2 w-max max-w-[180px] bg-slate-900 border border-white/20 text-white text-[9px] px-2 py-1.5 rounded opacity-0 group-hover/tag:opacity-100 transition-opacity pointer-events-none z-[300] shadow-2xl">
-                                                            {TAG_DESCRIPTIONS[tag.label] || "특별한 훈장"}
-                                                            <div className="absolute top-full right-4 border-[5px] border-transparent border-t-slate-900"></div>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
+                                    <div className="flex flex-col w-20 pl-2 shrink-0">
+                                        <span className={cn("font-bold text-xs", match.result === "WIN" ? "text-blue-400" : "text-red-400")}>{match.result === "WIN" ? "승리" : "패배"}</span>
+                                        <span className="text-[10px] text-slate-600">{match.date}</span>
+                                    </div>
 
-                                            {/* 팀원 리스트 섹션 추가 */}
-                                            <div className="hidden xl:grid grid-cols-2 gap-x-3 gap-y-0.5 border-l border-white/5 pl-4 shrink-0">
-                                                {(match as any).participants?.map((p: any, idx: number) => (
-                                                    <button
-                                                        key={idx}
-                                                        onClick={() => fetchData(`${p.gameName}#${p.tagLine}`)}
-                                                        className="flex items-center gap-1 hover:bg-white/5 p-0.5 rounded transition-colors group/user w-24"
-                                                    >
-                                                        <img
-                                                            src={`https://ddragon.leagueoflegends.com/cdn/15.1.1/img/champion/${p.championName}.png`}
-                                                            className="w-3.5 h-3.5 rounded-sm border border-white/10 shrink-0"
-                                                            alt={p.championName}
-                                                        />
-                                                        <span className="text-[9px] text-slate-500 group-hover/user:text-blue-400 truncate text-left">
-                                                            {p.gameName}
-                                                        </span>
-                                                    </button>
-                                                ))}
-                                            </div>
-
-                                            <div className="text-right shrink-0 ml-2">
-                                                <div className={cn("text-2xl font-black italic leading-none", match.result === "WIN" ? getTier(match.score).color : "text-red-400")}>{match.score}</div>
-                                                <div className="text-[9px] text-slate-600 font-bold uppercase mt-1">Score</div>
-                                            </div>
+                                    <div className="flex items-center gap-3 w-36 shrink-0">
+                                        <div className="w-10 h-10 rounded-full bg-slate-800 overflow-hidden border border-white/10 shrink-0">
+                                            <img
+                                                src={`https://ddragon.leagueoflegends.com/cdn/15.1.1/img/champion/${champImg}.png`}
+                                                alt={match.champion}
+                                                className="w-full h-full object-cover scale-110"
+                                                onError={(e) => (e.currentTarget.src = "https://ddragon.leagueoflegends.com/cdn/15.1.1/img/profileicon/29.png")}
+                                            />
+                                        </div>
+                                        <div className="flex flex-col truncate">
+                                            <span className="font-bold text-sm text-slate-200">{match.champion}</span>
+                                            <span className="text-[10px] text-slate-500 font-bold uppercase">{match.role}</span>
                                         </div>
                                     </div>
-                                );
-                            })}
-                        </div>
+
+                                    <div className="flex flex-col w-24 shrink-0">
+                                        <span className="text-sm font-medium text-slate-300">{match.kda}</span>
+                                        <span className="text-[10px] text-slate-600 tracking-tighter italic">KDA Score</span>
+                                    </div>
+
+                                    <div className="flex-1 flex justify-end items-center gap-4 min-w-0">
+                                        <div className="flex flex-wrap justify-end gap-1.5 max-w-[160px]">
+                                            {dynamicTags.map((tag, idx) => (
+                                                <div key={idx} className="group/tag relative">
+                                                    <span className={cn("cursor-help text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider transition-colors", tag.bg, tag.color)}>
+                                                        {tag.label}
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => handleTeamScan(match)}
+                                            className="hidden md:flex items-center gap-1.5 h-8 bg-transparent border-blue-500/30 hover:bg-blue-500/10 hover:border-blue-500/60 text-blue-400 text-[10px] font-black italic px-3"
+                                        >
+                                            <BarChart3 size={12} />
+                                            TEAM SCAN
+                                        </Button>
+
+                                        <div className="text-right shrink-0 ml-2 w-12">
+                                            <div className={cn("text-2xl font-black italic leading-none", match.result === "WIN" ? getTier(match.score).color : "text-red-400")}>{match.score}</div>
+                                            <div className="text-[9px] text-slate-600 font-bold uppercase mt-1">Score</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
             </div>
@@ -380,7 +407,7 @@ function AnalysisContent() {
     );
 }
 
-function StatBox({ icon, label, value, sub, color, bg }: any) {
+function StatBox({ icon, label, value, sub, color, bg }: { icon: React.ReactNode; label: string; value: string; sub: string; color: string; bg: string }) {
     return (
         <div className="bg-[#161616] p-6 rounded-2xl border border-white/5 flex flex-col gap-4">
             <div className="flex justify-between items-start">
@@ -397,7 +424,7 @@ function StatBox({ icon, label, value, sub, color, bg }: any) {
 
 export default function AnalysisPage() {
     return (
-        <Suspense fallback={<div className="bg-[#0a0a0a] min-h-screen text-white flex items-center justify-center">Loading...</div>}>
+        <Suspense fallback={<div className="bg-[#0a0a0a] min-h-screen text-white flex items-center justify-center font-black italic animate-pulse">BOOTING SYSTEM...</div>}>
             <AnalysisContent />
         </Suspense>
     );
