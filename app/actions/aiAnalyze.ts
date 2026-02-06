@@ -23,7 +23,7 @@ export async function getAiMatchFeedback(matches: any[], playerName: string) {
         }));
 
         const prompt = `
-    당신은 데이터 기반의 롤 전략 분석가입니다. 
+    당신은 리그오브레전드 프로팀 코치이고, 소환사 '${playerName}'는 당신의 팀 에이스입니다. 
     소환사 '${playerName}'의 **이번 경기 기록**을 바탕으로 객관적인 퍼포먼스 체크를 수행하세요.
 
     [이번 경기 데이터]

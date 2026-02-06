@@ -42,7 +42,7 @@ export default function AdBanner({ unitId, width, height, className }: AdFitProp
             {/* 가이드 영역: zIndex를 제거하거나 0으로 설정해서 보이게 수정 */}
             {isMounted && (
                 <div
-                    className="bg-white/5 border border-dashed border-white/20 flex flex-col items-center justify-center rounded-xl"
+                    className="bg-white/5 border-white/20 flex flex-col items-center justify-center"
                     style={{
                         width: `${width}px`,
                         height: `${height}px`,
@@ -53,8 +53,6 @@ export default function AdBanner({ unitId, width, height, className }: AdFitProp
                         zIndex: 0 // -1에서 0으로 변경하여 배경 위로 올림
                     }}
                 >
-                    <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Adfit Area</span>
-                    <span className="text-[12px] text-slate-400 font-black italic">{width} x {height}</span>
                 </div>
             )}
         </div>
