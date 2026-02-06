@@ -66,19 +66,27 @@ export default function RootLayout({
           </div>
         </header>
 
-        {/* 좌측 광고: top-20 (헤더 16 + 여백 4)으로 내려서 천장 안 뚫게 수정 */}
-        <aside className="hidden 2xl:block fixed left-[calc(50%-860px)] top-100 z-40">
-          <AdFitBanner unitId="DAN-9yY5PCwh3z3a3VJp" width="160" height="600" className="my-0" />
-        </aside>
+        {/* layout.tsx 구조 변경 */}
+        <div className="relative mx-auto w-full max-w-[1200px]">
+          {/* 왼쪽 광고: 본문 왼쪽 끝에서 바깥으로 180px 밀어내기 */}
+          <aside className="hidden 2xl:block absolute -left-[180px] top-[100px] w-[160px]">
+            <div className="fixed top-[100px]">
+              <AdFitBanner unitId="DAN-9yY5PCwh3z3a3VJp" width="160" height="600" />
+            </div>
+          </aside>
 
-        {/* 메인 콘텐츠 */}
-        {children}
+          {/* 메인 콘텐츠 */}
+          <main className="w-full">
+            {children}
+          </main>
 
-        {/* 우측 광고: top-20으로 수정 */}
-        <aside className="hidden 2xl:block fixed right-[calc(50%-860px)] top-100 z-40">
-          <AdFitBanner unitId="DAN-ZLGWx5TkrW2vavX5" width="160" height="600" className="my-0" />
-        </aside>
-
+          {/* 오른쪽 광고: 본문 오른쪽 끝에서 바깥으로 180px 밀어내기 */}
+          <aside className="hidden 2xl:block absolute -right-[180px] top-[100px] w-[160px]">
+            <div className="fixed top-[100px]">
+              <AdFitBanner unitId="DAN-ZLGWx5TkrW2vavX5" width="160" height="600" />
+            </div>
+          </aside>
+        </div>
         <script
           type="text/javascript"
           src="//t1.daumcdn.net/kas/static/ba.min.js"

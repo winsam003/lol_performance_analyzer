@@ -10,23 +10,28 @@ interface AdFitProps {
 }
 
 export default function AdBanner({ unitId, width, height, className }: AdFitProps) {
-    // 마운트 여부 확인을 위한 상태
     const [isMounted, setIsMounted] = useState(false);
 
     useEffect(() => {
         setIsMounted(true);
 
-        try {
-            // 스크립트가 이미 로드된 상태에서 동적으로 추가된 광고를 스캔하도록 유도
-            if ((window as any).adfit) {
-                // 필요 시 추가 로직
+        const timer = setTimeout(() => {
+            // window 객체와 adfit 객체가 존재하는지 먼저 확인합니다.
+            if (typeof window !== "undefined" && (window as any).adfit) {
+                try {
+                    // display 함수가 실제로 존재하고 함수 타입인지 확인 후 호출합니다.
+                    if (typeof (window as any).adfit.display === 'function') {
+                        (window as any).adfit.display();
+                    }
+                } catch (e) {
+                    console.warn("Adfit display error:", e);
+                }
             }
-        } catch (e) {
-            console.error("Adfit error:", e);
-        }
-    }, []);
+        }, 100);
 
-    // 서버 사이드에서는 아무것도 렌더링하지 않음 (Hydration 에러 방지)
+        return () => clearTimeout(timer);
+    }, [unitId]); // 유닛 ID가 변경될 때마다 광고를 다시 호출하도록 설정합니다.
+
     if (!isMounted) return null;
 
     return (
@@ -38,23 +43,6 @@ export default function AdBanner({ unitId, width, height, className }: AdFitProp
                 data-ad-width={width}
                 data-ad-height={height}
             ></ins>
-
-            {/* 가이드 영역: zIndex를 제거하거나 0으로 설정해서 보이게 수정 */}
-            {isMounted && (
-                <div
-                    className="flex flex-col items-center justify-center"
-                    style={{
-                        width: `${width}px`,
-                        height: `${height}px`,
-                        position: 'absolute',
-                        top: '50%',
-                        left: '50%',
-                        transform: 'translate(-50%, -50%)',
-                        zIndex: 0 // -1에서 0으로 변경하여 배경 위로 올림
-                    }}
-                >
-                </div>
-            )}
         </div>
     );
 }
