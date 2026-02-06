@@ -67,7 +67,7 @@ export default function RootLayout({
         </header>
 
         {/* 좌측 광고: top-20 (헤더 16 + 여백 4)으로 내려서 천장 안 뚫게 수정 */}
-        <aside className="hidden 2xl:block fixed left-[calc(50%-880px)] top-100 z-40">
+        <aside className="hidden 2xl:block fixed left-[calc(50%-860px)] top-100 z-40">
           <AdFitBanner unitId="DAN-9yY5PCwh3z3a3VJp" width="160" height="600" className="my-0" />
         </aside>
 
@@ -75,7 +75,7 @@ export default function RootLayout({
         {children}
 
         {/* 우측 광고: top-20으로 수정 */}
-        <aside className="hidden 2xl:block fixed right-[calc(50%-880px)] top-100 z-40">
+        <aside className="hidden 2xl:block fixed right-[calc(50%-860px)] top-100 z-40">
           <AdFitBanner unitId="DAN-ZLGWx5TkrW2vavX5" width="160" height="600" className="my-0" />
         </aside>
 
