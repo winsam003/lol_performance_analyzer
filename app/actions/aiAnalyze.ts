@@ -10,7 +10,7 @@ export async function getAiMatchFeedback(matches: any[], playerName: string) {
 
     try {
         // 형이 성공했던 그 모델명 유지
-        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
         const summary = matches.map(m => ({
             champ: m.champion,
