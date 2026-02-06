@@ -66,19 +66,18 @@ export default function RootLayout({
           </div>
         </header>
 
-        {/* 왼쪽 광고: 화면 왼쪽 끝에서 20px 띄움 */}
-        <aside className="hidden 2xl:block fixed left-5 top-[100px] z-40 w-[160px]">
-          <AdFitBanner unitId="DAN-9yY5PCwh3z3a3VJp" width="160" height="600" />
+        {/* ─── 광고 레이어: z-index를 100으로 상향 ─── */}
+        <aside className="hidden 2xl:block fixed left-5 top-[100px] z-[100] w-[160px] h-[600px]">
+          <AdFitBanner key="left-ad" unitId="DAN-9yY5PCwh3z3a3VJp" width="160" height="600" />
         </aside>
 
-        {/* 메인 콘텐츠: 기존 깨지던 w-full이나 max-w를 자유롭게 조절하세요 */}
-        <main>
+        {/* ─── 메인 콘텐츠: 광고가 절대 가리지 않도록 2xl에서 좌우 패딩 추가 ─── */}
+        <main className="2xl:px-[200px]">
           {children}
         </main>
 
-        {/* 오른쪽 광고: 화면 오른쪽 끝에서 20px 띄움 */}
-        <aside className="hidden 2xl:block fixed right-5 top-[100px] z-40 w-[160px]">
-          <AdFitBanner unitId="DAN-ZLGWx5TkrW2vavX5" width="160" height="600" />
+        <aside className="hidden 2xl:block fixed right-5 top-[100px] z-[100] w-[160px] h-[600px]">
+          <AdFitBanner key="right-ad" unitId="DAN-ZLGWx5TkrW2vavX5" width="160" height="600" />
         </aside>
 
         <script
