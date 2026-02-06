@@ -15,11 +15,11 @@ export default function AdBanner({ unitId, width, height, className }: AdFitProp
     useEffect(() => {
         setIsMounted(true);
 
-        const timer = setTimeout(() => {
-            // window 객체와 adfit 객체가 존재하는지 먼저 확인합니다.
+        // 광고 호출 로직을 함수화하여 안전하게 실행합니다.
+        const loadAd = () => {
             if (typeof window !== "undefined" && (window as any).adfit) {
                 try {
-                    // display 함수가 실제로 존재하고 함수 타입인지 확인 후 호출합니다.
+                    // 수동 호출 함수가 존재하면 실행
                     if (typeof (window as any).adfit.display === 'function') {
                         (window as any).adfit.display();
                     }
@@ -27,15 +27,16 @@ export default function AdBanner({ unitId, width, height, className }: AdFitProp
                     console.warn("Adfit display error:", e);
                 }
             }
-        }, 100);
+        };
 
+        const timer = setTimeout(loadAd, 200); // DOM 안착을 위해 시간을 조금 더 넉넉히 줍니다.
         return () => clearTimeout(timer);
-    }, [unitId]); // 유닛 ID가 변경될 때마다 광고를 다시 호출하도록 설정합니다.
+    }, [unitId]);
 
     if (!isMounted) return null;
 
     return (
-        <div className={cn("flex justify-center items-center my-4 relative", className)}>
+        <div className={cn("flex justify-center items-center my-4 relative min-h-[50px]", className)}>
             <ins
                 className="kakao_ad_area"
                 style={{ display: "none" }}

@@ -66,24 +66,21 @@ export default function RootLayout({
           </div>
         </header>
 
-        {/* layout.tsx 구조 변경 */}
-        <aside className="hidden 2xl:block absolute -left-[180px] top-[100px] w-[160px]">
-          <div className="fixed top-[100px]">
-            <AdFitBanner unitId="DAN-9yY5PCwh3z3a3VJp" width="160" height="600" />
-          </div>
+        {/* 왼쪽 광고: 화면 왼쪽 끝에서 20px 띄움 */}
+        <aside className="hidden 2xl:block fixed left-5 top-[100px] z-40 w-[160px]">
+          <AdFitBanner unitId="DAN-9yY5PCwh3z3a3VJp" width="160" height="600" />
         </aside>
 
-        {/* 메인 콘텐츠 */}
-        <main className="w-full">
+        {/* 메인 콘텐츠: 기존 깨지던 w-full이나 max-w를 자유롭게 조절하세요 */}
+        <main>
           {children}
         </main>
 
-        {/* 오른쪽 광고: 본문 오른쪽 끝에서 바깥으로 180px 밀어내기 */}
-        <aside className="hidden 2xl:block absolute -right-[180px] top-[100px] w-[160px]">
-          <div className="fixed top-[100px]">
-            <AdFitBanner unitId="DAN-ZLGWx5TkrW2vavX5" width="160" height="600" />
-          </div>
+        {/* 오른쪽 광고: 화면 오른쪽 끝에서 20px 띄움 */}
+        <aside className="hidden 2xl:block fixed right-5 top-[100px] z-40 w-[160px]">
+          <AdFitBanner unitId="DAN-ZLGWx5TkrW2vavX5" width="160" height="600" />
         </aside>
+
         <script
           type="text/javascript"
           src="//t1.daumcdn.net/kas/static/ba.min.js"
