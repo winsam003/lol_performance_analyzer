@@ -42,7 +42,7 @@ export default function AdBanner({ unitId, width, height, className }: AdFitProp
             {/* 가이드 영역: zIndex를 제거하거나 0으로 설정해서 보이게 수정 */}
             {isMounted && (
                 <div
-                    className="bg-white/5 border-white/20 flex flex-col items-center justify-center"
+                    className="flex flex-col items-center justify-center"
                     style={{
                         width: `${width}px`,
                         height: `${height}px`,
