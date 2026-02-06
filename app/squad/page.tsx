@@ -8,6 +8,7 @@ import { analyzeSummoner, AnalysisResult } from "../actions/analyze";
 import { getSquadAiFeedback } from "../actions/squadAiAnalyze";
 import { Suspense } from "react";
 import Link from "next/link";
+import AdBanner from "@/components/AdBanner";
 
 const QUEUE_TYPES = [
     { id: "all", label: "전체 매치", icon: <Layers size={14} /> },
@@ -208,6 +209,16 @@ function SquadAnalysisContent() {
                                     </div>
                                     <div className="absolute inset-0 bg-gradient-to-r from-blue-600/0 via-blue-600/10 to-blue-600/0 transform translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
                                 </button>
+                                <div className="w-full flex flex-col items-center py-12 my-4 border-y border-white/[0.03] bg-white/[0.01]">
+                                    {/* 광고 유닛을 감싸는 박스에 최소 높이를 주어 겹침 방지 */}
+                                    <div className="relative min-h-[250px] w-full flex justify-center items-center overflow-hidden">
+                                        <AdBanner
+                                            unitId="DAN-kPapG5XifUmSgwJo"
+                                            width="300"
+                                            height="250"
+                                        />
+                                    </div>
+                                </div>
                                 {aiReport && (
                                     <div className="mt-8 w-full max-w-4xl p-8 bg-[#0a0a0a] border border-blue-500/20 rounded-[2.5rem] shadow-2xl animate-in slide-in-from-top-4 duration-500 relative overflow-hidden text-left">
                                         <div className="absolute top-0 right-0 p-4 opacity-5"><ShieldAlert size={120} /></div>
@@ -327,7 +338,16 @@ function SquadAnalysisContent() {
                             </table>
                         </div>
                     </div>
-
+                    <div className="w-full flex flex-col items-center py-12 my-4 border-y border-white/[0.03] bg-white/[0.01]">
+                        {/* 광고 유닛을 감싸는 박스에 최소 높이를 주어 겹침 방지 */}
+                        <div className="relative min-h-[250px] w-full flex justify-center items-center overflow-hidden">
+                            <AdBanner
+                                unitId="DAN-me3iQo7eaz8bwxv2"
+                                width="300"
+                                height="250"
+                            />
+                        </div>
+                    </div>
                     <div className="container mx-auto px-6 pb-20">
                         <div className="flex flex-col gap-6 max-w-6xl mx-auto">
                             {commonMatches.map((match) => {

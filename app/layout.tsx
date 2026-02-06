@@ -4,6 +4,7 @@ import "./globals.css";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { Analytics } from "@vercel/analytics/next"
+import AdFitBanner from "@/components/AdBanner";
 
 
 const inter = Inter({ subsets: ["latin"] });
@@ -39,7 +40,6 @@ export const metadata: Metadata = {
     description: "팀 내 기여도 분석 시스템 (TCS)으로 진짜 캐리를 가려내세요.",
   },
 };
-
 export default function RootLayout({
   children,
 }: {
@@ -51,35 +51,39 @@ export default function RootLayout({
         suppressHydrationWarning
         className={cn(
           inter.className,
-          "min-h-screen bg-[#0b0b0b] antialiased text-slate-200",
+          "min-h-screen bg-[#0b0b0b] antialiased text-slate-200 relative",
         )}
       >
         <Analytics />
-        {/* 네비게이션 바 */}
+
+        {/* 헤더의 z-index를 50으로 설정하여 광고보다 위에 오도록 함 */}
         <header className="sticky top-0 z-50 w-full border-b border-white/5 bg-[#0b0b0b]/80 backdrop-blur-md">
           <div className="container mx-auto flex h-16 items-center justify-between px-6">
-            <div className="flex items-center gap-8">
-              <Link
-                href="/"
-                className="font-black text-2xl tracking-tighter text-white hover:opacity-80 transition-opacity cursor-pointer"
-              >
-                LOL.WINSAM<span className="text-blue-500">.XYZ</span>
-              </Link>
-              <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-400">
-                <a href="#" className="hover:text-white transition">
-                  {/* 기여도 랭킹 */}
-                </a>
-                <a href="#" className="hover:text-white transition">
-                  {/* 분석 알고리즘 */}
-                </a>
-              </nav>
-            </div>
-            {/* <div className="text-xs font-mono text-slate-500 bg-white/5 px-3 py-1 rounded-full border border-white/10">
-              LOL.WINSAM.XYZ
-            </div> */}
+            {/* 기존 헤더 내용 */}
+            <Link href="/" className="font-black text-2xl tracking-tighter text-white">
+              LOL.WINSAM<span className="text-blue-500">.XYZ</span>
+            </Link>
           </div>
         </header>
+
+        {/* 좌측 광고: top-20 (헤더 16 + 여백 4)으로 내려서 천장 안 뚫게 수정 */}
+        <aside className="hidden 2xl:block fixed left-[calc(50%-850px)] top-100 z-40">
+          <AdFitBanner unitId="DAN-9yY5PCwh3z3a3VJp" width="160" height="600" className="my-0" />
+        </aside>
+
+        {/* 메인 콘텐츠 */}
         {children}
+
+        {/* 우측 광고: top-20으로 수정 */}
+        <aside className="hidden 2xl:block fixed right-[calc(50%-850px)] top-100 z-40">
+          <AdFitBanner unitId="DAN-ZLGWx5TkrW2vavX5" width="160" height="600" className="my-0" />
+        </aside>
+
+        <script
+          type="text/javascript"
+          src="//t1.daumcdn.net/kas/static/ba.min.js"
+          async
+        ></script>
       </body>
     </html>
   );

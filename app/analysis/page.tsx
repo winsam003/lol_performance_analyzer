@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { analyzeSummoner, AnalysisResult, AnalyzedMatch } from "../actions/analyze";
 import { getAiMatchFeedback } from "../actions/aiAnalyze";
 import { Suspense } from "react";
+import AdBanner from "@/components/AdBanner";
 
 const QUEUES = [
     { id: "all", label: "전체", icon: <Layers size={14} /> },
@@ -288,6 +289,13 @@ function AnalysisContent() {
                                 ))}
                             </div>
                         </div>
+                        <div className="relative min-h-[250px] w-full flex justify-center items-center overflow-hidden">
+                            <AdBanner
+                                unitId="DAN-OjVpNaoCTNFcIvEN"
+                                width="300"
+                                height="250"
+                            />
+                        </div>
                     </div>
 
                     <div className="lg:col-span-2 space-y-4">
@@ -296,7 +304,13 @@ function AnalysisContent() {
                             <StatBox icon={<Eye size={20} />} label="시야 장악" value={Number(avgs.vision) > 30 ? "S" : "A"} sub={`평균 시야점수 ${avgs.vision}`} color="text-blue-500" bg="bg-blue-500/10" />
                             <StatBox icon={<Shield size={20} />} label="생존력" value={Number(avgs.deaths) < 4 ? "S" : "A"} sub={`평균 데스 ${avgs.deaths}`} color="text-green-500" bg="bg-green-500/10" />
                         </div>
-
+                        <div className="relative min-h-[250px] w-full flex justify-center items-center overflow-hidden">
+                            <AdBanner
+                                unitId="DAN-TzTRlqjK3YjSJObx" // <- 여기에 실제 유닛 ID 넣으셨는지 꼭 확인!
+                                width="300"
+                                height="250"
+                            />
+                        </div>
                         {filteredMatches.map((match) => {
                             const isExpanded = expandedMatchId === match.id;
                             const dynamicTags = getDynamicTags(match);

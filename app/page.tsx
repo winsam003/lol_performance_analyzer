@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, History, X, MessageSquare, Users, CheckCircle2, Zap, Info, ShieldCheck, Target, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
+import AdFitBanner from "@/components/AdBanner";
 
 export default function Home() {
   const [summoner, setSummoner] = useState("");
@@ -96,6 +97,7 @@ export default function Home() {
               </form>
             </div>
 
+
             <div className="mt-6 flex flex-wrap justify-center gap-2">
               {history.map((h) => (
                 <div key={h} className="group relative">
@@ -110,6 +112,17 @@ export default function Home() {
               ))}
             </div>
           </section>
+
+          <div className="w-full flex flex-col items-center py-12 my-4 border-y border-white/[0.03] bg-white/[0.01]">
+            {/* 광고 유닛을 감싸는 박스에 최소 높이를 주어 겹침 방지 */}
+            <div className="relative min-h-[250px] w-full flex justify-center items-center overflow-hidden">
+              <AdFitBanner
+                unitId="DAN-Ci825mcnbMvNPXFq"
+                width="300"
+                height="250"
+              />
+            </div>
+          </div>
 
           <section className="w-full">
             <div className="flex items-center gap-3 mb-6">
