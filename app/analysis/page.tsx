@@ -64,20 +64,6 @@ function AnalysisContent() {
     const [matchAiFeedbacks, setMatchAiFeedbacks] = useState<Record<string, string>>({});
     const [matchAiLoading, setMatchAiLoading] = useState<Record<string, boolean>>({});
 
-    useEffect(() => {
-        const script = document.createElement("script");
-        script.src = "https://t1.daumcdn.net/kas/static/ba.min.js";
-        script.async = true;
-        document.head.appendChild(script);
-
-        // 뒷정리 함수(Cleanup)도 넣어주는 게 좋습니다 (선택사항)
-        return () => {
-            if (document.head.contains(script)) {
-                document.head.removeChild(script);
-            }
-        };
-    }, []);
-
     const fetchData = async (query: string) => {
         if (!query) return;
         const finalQuery = query.includes("#") ? query : `${query}#KR1`;

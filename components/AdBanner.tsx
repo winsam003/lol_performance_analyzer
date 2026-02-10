@@ -10,12 +10,8 @@ interface AdFitProps {
 }
 
 export default function AdBanner({ unitId, width, height, className }: AdFitProps) {
-    const [isMounted, setIsMounted] = useState(false);
-
     useEffect(() => {
-        setIsMounted(true);
-
-        // 1. 광고 스크립트가 이미 있는지 확인하고 없으면 추가
+        // 1. 스크립트 로드 확인
         const scriptId = "kakao-adfit-script";
         let script = document.getElementById(scriptId) as HTMLScriptElement;
 
@@ -27,30 +23,30 @@ export default function AdBanner({ unitId, width, height, className }: AdFitProp
             document.head.appendChild(script);
         }
 
-        // 2. 스크립트가 로드된 후 광고를 렌더링하도록 수동 호출 (필요 시)
-        // 애드핏은 ba.min.js가 로드될 때 페이지 내 모든 kakao_ad_area를 찾습니다.
+        // 2. 이미 로드된 스크립트가 있다면, 새 광고 영역을 인식하도록 호출
+        // Next.js 페이지 전환 시 필수입니다.
+        const win = window as any;
+        if (win.adfit) {
+            win.adfit.display();
+        }
+
+        return () => {
+            // 페이지를 벗어날 때 호출 (선택사항)
+            if (win.adfit && win.adfit.destroy) {
+                win.adfit.destroy(unitId);
+            }
+        };
     }, [unitId]);
 
-    if (!isMounted) return null;
-
     return (
-        <div className={cn("flex justify-center items-center my-4 overflow-hidden", className)}>
+        <div className={className} style={{ width: `${width}px`, height: `${height}px` }}>
             <ins
                 className="kakao_ad_area"
-                style={{
-                    display: "block",
-                    width: `${width}px`,
-                    height: `${height}px`,
-                    textDecoration: "none"
-                }}
+                style={{ display: "block", textDecoration: "none" }}
                 data-ad-unit={unitId}
                 data-ad-width={width}
                 data-ad-height={height}
             ></ins>
         </div>
     );
-}
-
-function cn(...classes: any[]) {
-    return classes.filter(Boolean).join(" ");
 }
