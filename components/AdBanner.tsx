@@ -10,8 +10,11 @@ interface AdFitProps {
 }
 
 export default function AdBanner({ unitId, width, height, className }: AdFitProps) {
+    const [isMounted, setIsMounted] = useState(false);
+
     useEffect(() => {
-        // 1. 스크립트 로드 확인
+        setIsMounted(true);
+
         const scriptId = "kakao-adfit-script";
         let script = document.getElementById(scriptId) as HTMLScriptElement;
 
@@ -23,20 +26,22 @@ export default function AdBanner({ unitId, width, height, className }: AdFitProp
             document.head.appendChild(script);
         }
 
-        // 2. 이미 로드된 스크립트가 있다면, 새 광고 영역을 인식하도록 호출
-        // Next.js 페이지 전환 시 필수입니다.
-        const win = window as any;
-        if (win.adfit) {
-            win.adfit.display();
-        }
-
-        return () => {
-            // 페이지를 벗어날 때 호출 (선택사항)
-            if (win.adfit && win.adfit.destroy) {
-                win.adfit.destroy(unitId);
+        // 함수가 없을 때를 대비한 방어 로직 (setTimeout으로 지연 호출)
+        const loadAd = () => {
+            const win = window as any;
+            if (win.adfit && typeof win.adfit.display === 'function') {
+                win.adfit.display(unitId);
             }
         };
+
+        const timer = setTimeout(loadAd, 500); // 스크립트 로드 대기 시간 부여
+        return () => clearTimeout(timer);
     }, [unitId]);
+
+    // Hydration 에러 방지: 마운트 전에는 아무것도 그리지 않음
+    if (!isMounted) {
+        return <div style={{ width: `${width}px`, height: `${height}px` }} className={className} />;
+    }
 
     return (
         <div className={className} style={{ width: `${width}px`, height: `${height}px` }}>

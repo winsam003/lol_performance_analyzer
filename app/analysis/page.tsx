@@ -474,11 +474,11 @@ function AnalysisContent() {
                                                                                     <div key={i} className="w-[18px] h-[18px] bg-black/60 rounded-sm overflow-hidden border border-white/5 flex items-center justify-center">
                                                                                         {isValid ? (
                                                                                             <img
-                                                                                                src={`https://ddragon.leagueoflegends.com/cdn/15.1.1/img/item/${id}.png`}
+                                                                                                src={`https://ddragon.leagueoflegends.com/cdn/15.1.2/img/item/${id}.png`}
                                                                                                 className="w-full h-full object-cover"
                                                                                                 alt=""
                                                                                                 onError={(e) => {
-                                                                                                    e.currentTarget.src = `https://ddragon.leagueoflegends.com/cdn/14.24.1/img/item/${id}.png`;
+                                                                                                    e.currentTarget.src = `https://ddragon.leagueoflegends.com/cdn/15.1.2/img/item/${id}.png`;
                                                                                                 }}
                                                                                             />
                                                                                         ) : (
