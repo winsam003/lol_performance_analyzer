@@ -199,6 +199,13 @@ function AnalysisContent() {
         deaths: (filteredMatches.reduce((acc, m) => acc + (m.detail.deaths ?? 0), 0) / (filteredMatches.length || 1)).toFixed(1) || "0"
     };
 
+    useEffect(() => {
+        const script = document.createElement("script");
+        script.src = "https://t1.daumcdn.net/kas/static/ba.min.js";
+        script.async = true;
+        document.head.appendChild(script);
+    }, []);
+
     return (
         <main className="min-h-screen bg-[#0a0a0a] text-slate-200">
             <div className="border-b border-white/5 bg-[#111] sticky top-0 z-[100] backdrop-blur-md bg-opacity-80 px-6 py-4">
@@ -289,7 +296,7 @@ function AnalysisContent() {
                                 ))}
                             </div>
                         </div>
-                        <div className="relative min-h-[250px] w-full flex justify-center items-center overflow-hidden">
+                        <div className="relative min-h-[250px] w-full flex justify-center items-center">
                             <AdBanner
                                 unitId="DAN-OjVpNaoCTNFcIvEN"
                                 width="300"
@@ -304,7 +311,7 @@ function AnalysisContent() {
                             <StatBox icon={<Eye size={20} />} label="시야 장악" value={Number(avgs.vision) > 30 ? "S" : "A"} sub={`평균 시야점수 ${avgs.vision}`} color="text-blue-500" bg="bg-blue-500/10" />
                             <StatBox icon={<Shield size={20} />} label="생존력" value={Number(avgs.deaths) < 4 ? "S" : "A"} sub={`평균 데스 ${avgs.deaths}`} color="text-green-500" bg="bg-green-500/10" />
                         </div>
-                        <div className="relative min-h-[250px] w-full flex justify-center items-center overflow-hidden">
+                        <div className="relative min-h-[250px] w-full flex justify-center items-center">
                             <AdBanner
                                 unitId="DAN-TzTRlqjK3YjSJObx" // <- 여기에 실제 유닛 ID 넣으셨는지 꼭 확인!
                                 width="300"
