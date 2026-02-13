@@ -381,7 +381,7 @@ function SquadAnalysisContent() {
                                                         {isSuspect && <Skull className="absolute -right-2 -bottom-2 text-orange-500/10" size={60} />}
                                                         <div className="flex items-center gap-3 mb-3 relative z-10">
                                                             <div className="relative shrink-0">
-                                                                <img src={`https://ddragon.leagueoflegends.com/cdn/15.1.1/img/champion/${p.championName}.png`} className={cn("w-10 h-10 rounded-lg border", isSuspect ? "border-orange-500" : "border-white/10")} alt={p.championName} />
+                                                                <img src={`https://ddragon.leagueoflegends.com/cdn/16.3.1/img/champion/${p.championName}.png`} className={cn("w-10 h-10 rounded-lg border", isSuspect ? "border-orange-500" : "border-white/10")} alt={p.championName} />
                                                                 <div className={cn(
                                                                     "absolute -top-1 -right-1 text-[8px] font-black px-1 rounded italic text-white shadow-lg",
                                                                     isSuspect ? "bg-orange-600" : "bg-blue-600"
