@@ -76,76 +76,86 @@ export interface AnalysisResult {
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 /**
- * 인분 점수 계산 및 상세 내역 반환 로직
+ * 인분 점수 계산 및 상세 내역 반환 로직 (황금 밸런스 패치 완료)
  */
 function calculateContributionScore(p: any) {
-    // 1. KDA 기반 기본 점수 (기존 유지)
-    const rawKda = p.deaths === 0
-        ? (p.kills + p.assists) * 1.1
-        : (p.kills + p.assists) / p.deaths;
+    // 게임 시간(분) 구하기 (Riot API v5 기준 timePlayed 제공, 없으면 기본 30분)
+    const minutes = (p.timePlayed || 1800) / 60;
 
-    let baseScore = Math.floor(Math.sqrt(rawKda) * 40);
+    // 1. KDA 기반 기본 점수 (최대치 제한으로 킬 먹방러의 점수 뻥튀기 방지)
+    const rawKda = p.deaths === 0 ? (p.kills + p.assists) * 1.2 : (p.kills + p.assists) / p.deaths;
+    // KDA 효과는 최대 15까지만 적용 (학살해도 무한정 오르지 않음)
+    let baseScore = Math.floor(Math.sqrt(Math.min(rawKda, 15)) * 40);
     if (p.win) baseScore += 20;
 
-    // 2. 포지션별 기여도 보정
+    // 2. 분당 지표(Per Minute)를 활용한 포지션별 기여도 보정
+    const dpm = p.totalDamageDealtToChampions / minutes;       // 분당 딜량
+    const vpm = p.visionScore / minutes;                       // 분당 시야점수
+    const dtpm = p.totalDamageTaken / minutes;                 // 분당 받은 피해량(탱킹)
+
     let visionImpact = 0;
     let dmgImpact = 0;
     let tankingImpact = 0;
+    let assistImpact = 0;
     const role = p.teamPosition;
 
     switch (role) {
-        case "BOTTOM": // 원딜 (가장 강력한 딜 보너스)
-            // [버프] 800딜당 1점 (기존 1000~1200). 3만딜 넣으면 약 +25점
-            dmgImpact = Math.max(0, Math.floor((p.totalDamageDealtToChampions - 10000) / 800));
-            visionImpact = Math.floor((p.visionScore - 10) / 4);
+        case "BOTTOM": // 원딜 (딜 중심)
+            // DPM 400부터 점수 상승, 최대 45점 (상한선 도입)
+            dmgImpact = Math.min(45, Math.max(0, Math.floor((dpm - 400) / 20)));
+            visionImpact = Math.min(10, Math.max(0, Math.floor(vpm * 10)));
             break;
 
-        case "MIDDLE": // 미드
-            // [버프] 900딜당 1점. 3만딜 넣으면 약 +22점
-            dmgImpact = Math.max(0, Math.floor((p.totalDamageDealtToChampions - 10000) / 900));
-            visionImpact = Math.floor((p.visionScore - 12) / 3);
+        case "MIDDLE": // 미드 (딜 + 맵 리딩)
+            dmgImpact = Math.min(40, Math.max(0, Math.floor((dpm - 350) / 20)));
+            visionImpact = Math.min(15, Math.max(0, Math.floor(vpm * 12)));
             break;
 
-        case "TOP": // 탑
-            // [버프] 1100딜당 1점 + 탱킹 점수 강화
-            dmgImpact = Math.max(0, Math.floor((p.totalDamageDealtToChampions - 12000) / 1100));
-            visionImpact = Math.floor((p.visionScore - 12) / 4);
-            tankingImpact = p.totalDamageTaken > 15000
-                ? Math.min(25, Math.floor((p.totalDamageTaken - 15000) / 1000)) : 0;
+        case "TOP": // 탑 (탱킹 + 딜 + 스플릿)
+            dmgImpact = Math.min(25, Math.max(0, Math.floor((dpm - 300) / 20)));
+            // DTPM(분당 탱킹) 보너스 최대 25점
+            tankingImpact = Math.min(25, Math.max(0, Math.floor((dtpm - 600) / 40)));
+            visionImpact = Math.min(10, Math.max(0, Math.floor(vpm * 10)));
             break;
 
-        case "JUNGLE": // 정글
-            dmgImpact = Math.max(0, Math.floor((p.totalDamageDealtToChampions - 10000) / 1100));
-            visionImpact = Math.floor((p.visionScore - 15) / 3);
+        case "JUNGLE": // 정글 (오브젝트, 갱킹, 시야)
+            dmgImpact = Math.min(20, Math.max(0, Math.floor((dpm - 250) / 25)));
+            tankingImpact = Math.min(15, Math.max(0, Math.floor((dtpm - 500) / 50)));
+            visionImpact = Math.min(20, Math.max(0, Math.floor(vpm * 15)));
+            // 정글은 킬관여(어시스트) 보너스 추가 (최대 10점)
+            assistImpact = Math.min(10, Math.floor(p.assists * 0.8));
             break;
 
-        case "UTILITY": // 서포터
-            visionImpact = Math.floor((p.visionScore - 25) / 3);
-            dmgImpact = p.totalDamageDealtToChampions > 8000
-                ? Math.floor((p.totalDamageDealtToChampions - 8000) / 1200) : 0;
-            if (p.assists > 10) dmgImpact += (p.assists - 10) * 1.5;
+        case "UTILITY": // 서포터 (시야 + 킬관여 중심)
+            // VPM 최대 35점 보너스 (서포터의 딜량 상한선을 시야가 대체)
+            visionImpact = Math.min(35, Math.max(0, Math.floor((vpm - 1.0) * 14)));
+            // 어시스트 보너스 최대 25점
+            assistImpact = Math.min(25, Math.floor(p.assists * 1.2));
+            dmgImpact = Math.min(10, Math.max(0, Math.floor(dpm / 30)));
             break;
     }
 
-    // 3. [추가 완화] 데스 페널티 하향
-    // 데스당 감점 폭을 더 줄여서 딜 점수가 데스 감점을 압도하게 만듭니다.
+    // 3. 데스 페널티 (트롤링 감별)
     let deathPenalty = 0;
-    if (role === "TOP" || role === "UTILITY") {
-        // 탑, 서폿: 데스당 1.5점 (거의 안 깎이는 수준)
-        deathPenalty = Math.floor(p.deaths * 1.5);
+    if (role === "TOP" || role === "UTILITY" || role === "JUNGLE") {
+        deathPenalty = Math.floor(p.deaths * 2.0); // 이니시에이터 완화
     } else {
-        // 나머지: 데스당 2.5점 (기존 4~6점에서 대폭 하향)
-        deathPenalty = Math.floor(p.deaths * 2.5);
+        deathPenalty = Math.floor(p.deaths * 2.5); // 딜러 엄격하게 적용
     }
 
-    const finalScore = baseScore + visionImpact + dmgImpact + tankingImpact - deathPenalty;
+    // '지나치게 많이 죽은 뇌절' 추가 페널티 (8데스 이상부터 데스당 2점 추가 감점)
+    if (p.deaths >= 8) {
+        deathPenalty += Math.floor((p.deaths - 7) * 2);
+    }
+
+    const finalScore = baseScore + visionImpact + dmgImpact + tankingImpact + assistImpact - deathPenalty;
 
     return {
         score: Math.max(5, Math.min(250, finalScore)),
         breakdown: {
-            base: baseScore + tankingImpact,
+            base: baseScore + assistImpact, // 어시스트 보너스는 기본 점수에 병합 표시
             vision: visionImpact,
-            dmg: dmgImpact,
+            dmg: dmgImpact + tankingImpact, // 탱킹은 전투 기여도로 딜에 병합 표시
             deaths: -deathPenalty
         }
     };
@@ -185,17 +195,28 @@ export async function analyzeSummoner(gameName: string, tagLine: string): Promis
                 : "0%",
         };
 
-        await delay(500);
         const matchIds = await getMatchIds(account.puuid, 20);
         const matchesRaw = [];
 
-        for (const id of matchIds) {
-            const detail = await getMatchDetail(id);
-            if (detail) matchesRaw.push(detail);
-            await delay(250);
+        const chunkSize = 4;
+
+        for (let i = 0; i < matchIds.length; i += chunkSize) {
+            const chunk = matchIds.slice(i, i + chunkSize);
+            
+            const chunkResults = await Promise.all(
+                chunk.map(id => getMatchDetail(id))
+            );
+            
+            matchesRaw.push(...chunkResults);
+
+            if (i + chunkSize < matchIds.length) {
+                await delay(150);
+            }
         }
 
-        const analyzedMatches: AnalyzedMatch[] = matchesRaw
+        const filteredMatchesRaw = matchesRaw.filter(Boolean);
+
+        const analyzedMatches: AnalyzedMatch[] = filteredMatchesRaw
             .filter((m) => m && m.info)
             .map((match) => {
                 const participant = match.info.participants.find((p: any) => p.puuid === account.puuid);
@@ -213,7 +234,6 @@ export async function analyzeSummoner(gameName: string, tagLine: string): Promis
                         score: analysis.score,
                         breakdown: analysis.breakdown,
                         kda: `${p.kills}/${p.deaths}/${p.assists}`,
-                        // --- 아이템 데이터 추가 ---
                         item0: p.item0,
                         item1: p.item1,
                         item2: p.item2,
@@ -221,7 +241,6 @@ export async function analyzeSummoner(gameName: string, tagLine: string): Promis
                         item4: p.item4,
                         item5: p.item5,
                         item6: p.item6,
-                        // -----------------------
                         damage: p.totalDamageDealtToChampions,
                         deaths: p.deaths,
                         gold: p.goldEarned,
