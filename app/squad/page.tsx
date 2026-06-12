@@ -114,7 +114,7 @@ function SquadAnalysisContent() {
   const [selectedQueue, setSelectedQueue] = useState('all');
 
   // 💡 선택된 코치 성향 상태 (기본값은 kkOma 스타일)
-  const [selectedCoach, setSelectedCoach] = useState('kkoma');
+  const [selectedCoach, setSelectedCoach] = useState('basic');
 
   const [aiReport, setAiReport] = useState<string>('');
   const [isAiAnalyzing, setIsAiAnalyzing] = useState(false);
