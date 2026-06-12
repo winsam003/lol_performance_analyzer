@@ -33,10 +33,10 @@ const QUEUE_TYPES = [
 
 // 💡 새로 추가된 코치 라인업 상수
 const COACH_TYPES = [
-  { id: 'kkoma', label: '조곤조곤 팩폭형', emoji: '👔' },
-  { id: 'philosopher', label: '철학자', emoji: '🏛️' },
-  { id: 'hater', label: '방구석 악플러', emoji: '🤬' },
-  { id: 'global', label: '해외 중계진', emoji: '🇺🇸' },
+  { id: 'kkoma', label: '김정균 코치', emoji: '👔' },
+  { id: 'cvmax', label: '씨맥스 코치', emoji: '🤬' },
+  { id: 'hanmoonchul', label: '한문철 변호사', emoji: '⚖️' },
+  { id: 'ahn', label: '안정환 감독', emoji: '⚽' },
 ];
 
 const TITLES = {
