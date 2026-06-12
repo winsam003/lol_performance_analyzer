@@ -33,6 +33,7 @@ const QUEUE_TYPES = [
 
 // 💡 새로 추가된 코치 라인업 상수
 const COACH_TYPES = [
+  { id: 'basic', label: '기본', emoji: '👕' },
   { id: 'kkoma', label: '김정균 코치', emoji: '👔' },
   { id: 'cvmax', label: '씨맥스 코치', emoji: '🤬' },
   { id: 'hanmoonchul', label: '한문철 변호사', emoji: '⚖️' },
