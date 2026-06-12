@@ -31,27 +31,75 @@ const QUEUE_TYPES = [
   { id: '440', label: '자유 랭크', icon: <Users size={14} /> },
 ];
 
+// 💡 새로 추가된 코치 라인업 상수
+const COACH_TYPES = [
+  { id: 'kkoma', label: '조곤조곤 팩폭형', emoji: '👔' },
+  { id: 'philosopher', label: '철학자', emoji: '🏛️' },
+  { id: 'hater', label: '방구석 악플러', emoji: '🤬' },
+  { id: 'global', label: '해외 중계진', emoji: '🇺🇸' },
+];
+
 const TITLES = {
   DEATHS: (isBad: boolean) =>
     isBad
-      ? { title: '300원 맛집', desc: '상대에게 가장 많은 골드를 기부함', color: 'red' }
-      : { title: '불사조', desc: '위험한 순간에도 끝까지 살아남음', color: 'orange' },
+      ? {
+          title: '적팀의 산타클로스',
+          desc: '숨쉬듯 데스를 기록하며 상대의 성장을 주도한 일등공신',
+          color: 'red',
+        }
+      : {
+          title: '살신성인 선봉장',
+          desc: '팀을 위해 기꺼이 목숨을 던져 한타를 승리로 이끎',
+          color: 'orange',
+        },
   EFFICIENCY: (isBad: boolean) =>
     isBad
-      ? { title: '세금 도둑', desc: '골드 수급량 대비 영양가 없는 딜량', color: 'stone' }
-      : { title: '성장형 엔진', desc: '자원을 바탕으로 팀의 승리를 견인함', color: 'emerald' },
+      ? {
+          title: '국가부도의 주범',
+          desc: '골드는 다 빨아먹고 모기딜을 넣는 기적의 세금 도둑',
+          color: 'stone',
+        }
+      : {
+          title: '인간 창조경제',
+          desc: '적은 골드로도 팀의 승리를 견인하는 미친 가성비',
+          color: 'emerald',
+        },
   VISION: (isBad: boolean) =>
     isBad
-      ? { title: '망원경', desc: '시야 점수가 권장치보다 현저히 낮음', color: 'slate' }
-      : { title: '은밀한 조력자', desc: '보이지 않는 곳에서 팀을 지원함', color: 'cyan' },
+      ? {
+          title: '협곡의 심청이',
+          desc: '미니맵 구독을 해지하여 평생 암흑 속에서 게임을 즐김',
+          color: 'slate',
+        }
+      : {
+          title: '은밀한 그림자',
+          desc: '시야보다는 동물적인 감각과 피지컬로 협곡을 누빔',
+          color: 'cyan',
+        },
   DAMAGE: (isBad: boolean) =>
     isBad
-      ? { title: '평화주의자', desc: '팀 내 대인 피해량 기여도가 가장 낮음', color: 'green' }
-      : { title: '철벽 방어', desc: '딜보다 중요한 생존과 위치 선정', color: 'blue' },
+      ? {
+          title: '비폭력 평화주의자',
+          desc: '적을 때리는 것을 혐오하여 딜량 그래프가 땅에 처박힘',
+          color: 'green',
+        }
+      : {
+          title: '통곡의 벽',
+          desc: '딜은 남에게 맡기고 묵묵히 적의 공격을 다 받아낸 든든한 방패',
+          color: 'blue',
+        },
   SUSPECT: (isBad: boolean) =>
     isBad
-      ? { title: '범인(Suspect)', desc: '포지션 대비 기여도가 가장 처참함', color: 'orange' }
-      : { title: '숨은 공로자', desc: '기록 이상의 가치를 보여준 멤버', color: 'purple' },
+      ? {
+          title: '🚨 공개 수배자',
+          desc: '패배의 핵심 원흉. 상대팀의 6번째 멤버로 활약함',
+          color: 'orange',
+        }
+      : {
+          title: '억울한 희생양',
+          desc: '지표는 가장 낮지만, 승리를 위해 보이지 않는 곳에서 헌신함',
+          color: 'purple',
+        },
 };
 
 function SquadAnalysisContent() {
@@ -64,10 +112,12 @@ function SquadAnalysisContent() {
   const [data, setData] = useState<AnalysisResult | null>(null);
   const [selectedQueue, setSelectedQueue] = useState('all');
 
+  // 💡 선택된 코치 성향 상태 (기본값은 kkOma 스타일)
+  const [selectedCoach, setSelectedCoach] = useState('kkoma');
+
   const [aiReport, setAiReport] = useState<string>('');
   const [isAiAnalyzing, setIsAiAnalyzing] = useState(false);
 
-  // 💡 AI 분석용으로 선택된 매치 ID 상태 관리
   const [selectedMatchIds, setSelectedMatchIds] = useState<Set<string>>(new Set());
 
   const squadTargetList = useMemo(() => {
@@ -243,7 +293,8 @@ function SquadAnalysisContent() {
       .sort((a, b) => b.avgScore - a.avgScore);
 
     try {
-      const report = await getSquadAiFeedback(aiHierarchy);
+      // 💡 [핵심 연동] 서버 액션에 selectedCoach 값 넘겨주기 (서버 파일 업데이트 전까지는 무시됨)
+      const report = await getSquadAiFeedback(aiHierarchy, selectedCoach);
       setAiReport(report);
     } catch (err) {
       console.error(err);
@@ -252,7 +303,6 @@ function SquadAnalysisContent() {
     }
   };
 
-  // 💡 [핵심 수정 구역] 다이나믹 칭호 시스템 대규모 확장
   const getIdentity = (m: any, idx: number, total: number) => {
     const k = Number(m.avgKills);
     const d = Number(m.avgDeaths);
@@ -268,14 +318,12 @@ function SquadAnalysisContent() {
     const isAdc = r.includes('ADC') || r.includes('BOTTOM');
     const isSup = r.includes('SUP') || r.includes('UTILITY');
 
-    // 1. 최상위 절대 조건 (압도적 캐리 or 갱생 불가능한 트롤)
     if (d >= 12) return { label: '인간 넥서스', color: 'bg-red-950' };
     if (d >= 9 && score < 80) return { label: '협곡의 재앙', color: 'bg-red-900' };
     if (idx === 0 && score >= 150) return { label: '강림한 신(GOD)', color: 'bg-purple-600' };
     if (eff < 30) return { label: '협곡의 리먼 브라더스', color: 'bg-stone-800' };
     if (idx === total - 1 && score < 60) return { label: '폐급 폐기물', color: 'bg-red-800' };
 
-    // 2. 포지션별(Role) 맞춤형 팩폭 및 칭찬 칭호
     if (isTop) {
       if (score >= 120 && eff > 100) return { label: '국가대표 고기방패', color: 'bg-blue-700' };
       if (eff > 110 && d < 5) return { label: '강화 대리석 척추', color: 'bg-emerald-600' };
@@ -310,12 +358,11 @@ function SquadAnalysisContent() {
       if (score >= 120) return { label: '협곡의 창조주', color: 'bg-purple-500' };
     }
 
-    // 3. 일반 범용 조건 (위 조건에 안 걸렸거나 포지션 특정 안된 경우)
     if (idx === 0 && score >= 115) return { label: '에이스(ACE)', color: 'bg-blue-600' };
-    if (idx === 0) return { label: '소년가장', color: 'bg-sky-700' }; // 1등인데 점수가 낮을때
+    if (idx === 0) return { label: '소년가장', color: 'bg-sky-700' };
     if (score >= 120) return { label: '승리의 주역', color: 'bg-blue-500' };
     if (idx === total - 1 && score < 85) return { label: '지명수배자', color: 'bg-red-600' };
-    if (idx === total - 1) return { label: '행복롤 깍두기', color: 'bg-orange-500' }; // 꼴등인데 점수가 나쁘지 않을때
+    if (idx === total - 1) return { label: '행복롤 깍두기', color: 'bg-orange-500' };
     if (eff >= 120) return { label: '가성비 괴물', color: 'bg-emerald-500' };
     if (v >= 35) return { label: '인간 와드', color: 'bg-cyan-600' };
     if (d >= 8) return { label: '300원 맛집', color: 'bg-red-600' };
@@ -338,6 +385,7 @@ function SquadAnalysisContent() {
       <div className="bg-gradient-to-b from-blue-900/10 to-transparent border-b border-white/5 py-16">
         <div className="container mx-auto px-6 text-center">
           <div className="flex items-center justify-center gap-4 mb-8 mx-auto relative z-30 flex-wrap">
+            {/* 큐 타입 선택 UI */}
             <div className="flex bg-[#111] p-1 rounded-xl border border-white/5 w-fit">
               {QUEUE_TYPES.map((q) => (
                 <button
@@ -354,6 +402,7 @@ function SquadAnalysisContent() {
                 </button>
               ))}
             </div>
+
             <button
               onClick={() => fetchSquadData(true)}
               disabled={refreshing}
@@ -374,7 +423,23 @@ function SquadAnalysisContent() {
               <h1 className="text-5xl md:text-7xl font-black italic tracking-tighter text-white mb-12 uppercase">
                 SQUAD <span className="text-blue-500">HIERARCHY</span>
               </h1>
-
+              {/* 💡 [수정 구역 2] 코치 성향 선택 UI 추가 */}
+              <div className="flex bg-[#111] p-1 rounded-xl border border-white/5 w-fit mx-auto mb-8">
+                {COACH_TYPES.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => setSelectedCoach(c.id)}
+                    className={cn(
+                      'flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all',
+                      selectedCoach === c.id
+                        ? 'bg-purple-600 text-white'
+                        : 'text-slate-500 hover:text-slate-300',
+                    )}
+                  >
+                    <span className="text-sm">{c.emoji}</span> {c.label}
+                  </button>
+                ))}
+              </div>
               <div className="flex flex-col items-center mb-12">
                 <button
                   onClick={handleAiAnalysis}
@@ -392,7 +457,10 @@ function SquadAnalysisContent() {
                     ) : (
                       <>
                         <TrendingUp className="text-blue-500 group-hover:text-white" size={20} />
-                        <span>AI 스쿼드 리포트</span>
+                        <span>
+                          AI 스쿼드 리포트 ({COACH_TYPES.find((c) => c.id === selectedCoach)?.emoji}
+                          )
+                        </span>
                       </>
                     )}
                   </div>
@@ -802,24 +870,32 @@ function SquadAnalysisContent() {
                                   'text-[8px] px-2 py-0.5 rounded-full font-black uppercase block text-center truncate shadow-sm',
                                   isSuspect
                                     ? 'bg-orange-600 text-white animate-bounce'
-                                    : p.score >= 135
+                                    : p.score >= 150
                                       ? 'bg-purple-600 text-white'
-                                      : p.score >= 115
-                                        ? 'bg-blue-600 text-white'
-                                        : p.score >= 95
-                                          ? 'bg-emerald-600 text-white'
-                                          : 'bg-slate-800 text-slate-400',
+                                      : p.score >= 135
+                                        ? 'bg-red-600 text-white'
+                                        : p.score >= 115
+                                          ? 'bg-blue-600 text-white'
+                                          : p.score >= 95
+                                            ? 'bg-emerald-600 text-white'
+                                            : p.score >= 75
+                                              ? 'bg-slate-600 text-white'
+                                              : 'bg-stone-800 text-slate-400',
                                 )}
                               >
                                 {isSuspect
-                                  ? '🚨 이 판의 범인'
-                                  : p.score >= 135
-                                    ? '하드캐리'
-                                    : p.score >= 115
-                                      ? 'ACE'
-                                      : p.score >= 95
-                                        ? '1인분'
-                                        : '버스 승객'}
+                                  ? '🚨 이 판의 확정 범인'
+                                  : p.score >= 150
+                                    ? '👑 협곡의 지배자'
+                                    : p.score >= 135
+                                      ? '🔥 멱살 하드캐리'
+                                      : p.score >= 115
+                                        ? '⭐ 빛나는 에이스'
+                                        : p.score >= 95
+                                          ? '👍 든든한 1인분'
+                                          : p.score >= 75
+                                            ? '🚌 무임승차 승객'
+                                            : '💸 구제불능 세금도둑'}
                               </span>
                             </div>
                           </div>
