@@ -21,6 +21,7 @@ import {
 import { cn } from '@/lib/utils';
 import { analyzeSummoner, AnalysisResult } from '../actions/analyze';
 import { getSquadAiFeedback } from '../actions/squadAiAnalyze';
+import type { SquadAiContext, SquadAiMember } from '../actions/squadAiAnalyze';
 import { Suspense } from 'react';
 import Link from 'next/link';
 import AdBanner from '@/components/AdBanner';
@@ -30,6 +31,37 @@ const QUEUE_TYPES = [
   { id: '420', label: '솔랭/듀오', icon: <User size={14} /> },
   { id: '440', label: '자유 랭크', icon: <Users size={14} /> },
 ];
+
+const SUMMONERS_RIFT_QUEUE_IDS = new Set([400, 420, 430, 440, 490]);
+
+const QUEUE_LABELS: Record<number, string> = {
+  400: '일반 드래프트',
+  420: '솔로 랭크',
+  430: '일반 선택',
+  440: '자유 랭크',
+  450: '칼바람 나락',
+  490: '빠른 대전',
+};
+
+interface AiStatsAccumulator {
+  name: string;
+  tag: string;
+  totalScore: number;
+  matchCount: number;
+  deaths: number;
+  kills: number;
+  assists: number;
+  dmg: number;
+  gold: number;
+  vision: number;
+  roleCounts: Record<string, number>;
+  breakdown: {
+    base: number;
+    vision: number;
+    dmg: number;
+    deaths: number;
+  };
+}
 
 // 💡 새로 추가된 코치 라인업 상수
 const COACH_TYPES = [
@@ -239,7 +271,7 @@ function SquadAnalysisContent() {
 
     setIsAiAnalyzing(true);
 
-    const aiStatsMap: Record<string, any> = {};
+    const aiStatsMap: Record<string, AiStatsAccumulator> = {};
     targetMatches.forEach((match) => {
       match.allParticipants.forEach((p) => {
         const pFullId = `${p.gameName}#${p.tagLine}`.toUpperCase().replace(/\s/g, '');
@@ -256,7 +288,7 @@ function SquadAnalysisContent() {
               dmg: 0,
               gold: 0,
               vision: 0,
-              role: (p as any).role || (p as any).teamPosition || '',
+              roleCounts: {},
               breakdown: { base: 0, vision: 0, dmg: 0, deaths: 0 },
             };
           }
@@ -268,7 +300,9 @@ function SquadAnalysisContent() {
           aiStatsMap[pFullId].assists += a;
           aiStatsMap[pFullId].dmg += p.damage;
           aiStatsMap[pFullId].gold += p.gold;
-          aiStatsMap[pFullId].vision += (p as any).visionScore || 0;
+          aiStatsMap[pFullId].vision += p.visionScore || 0;
+          aiStatsMap[pFullId].roleCounts[p.role] =
+            (aiStatsMap[pFullId].roleCounts[p.role] || 0) + 1;
           if (p.breakdown) {
             aiStatsMap[pFullId].breakdown.base += p.breakdown.base;
             aiStatsMap[pFullId].breakdown.vision += p.breakdown.vision;
@@ -279,23 +313,61 @@ function SquadAnalysisContent() {
       });
     });
 
-    const aiHierarchy = Object.values(aiStatsMap)
-      .map((s: any) => ({
-        ...s,
-        avgScore: Math.floor(s.totalScore / s.matchCount),
-        avgKDA: `${(s.kills / s.matchCount).toFixed(1)}/${(s.deaths / s.matchCount).toFixed(1)}/${(s.assists / s.matchCount).toFixed(1)}`,
-        avgKills: (s.kills / s.matchCount).toFixed(1),
-        avgAssists: (s.assists / s.matchCount).toFixed(1),
-        avgDmg: Math.floor(s.dmg / s.matchCount),
-        avgVision: (s.vision / s.matchCount).toFixed(1),
-        efficiency: Math.floor((s.dmg / (s.gold || 1)) * 100),
-        avgDeaths: (s.deaths / s.matchCount).toFixed(1),
-      }))
+    const aiHierarchy: SquadAiMember[] = Object.values(aiStatsMap)
+      .map((s) => {
+        const primaryRole = Object.entries(s.roleCounts)
+          .sort(([, countA], [, countB]) => countB - countA)[0]?.[0] || 'UNKNOWN';
+
+        return {
+          name: s.name,
+          tag: s.tag,
+          matchCount: s.matchCount,
+          primaryRole,
+          roleDistribution: s.roleCounts,
+          avgScore: Math.round(s.totalScore / s.matchCount),
+          avgKDA: `${(s.kills / s.matchCount).toFixed(1)}/${(s.deaths / s.matchCount).toFixed(1)}/${(s.assists / s.matchCount).toFixed(1)}`,
+          avgKills: Number((s.kills / s.matchCount).toFixed(1)),
+          avgDeaths: Number((s.deaths / s.matchCount).toFixed(1)),
+          avgAssists: Number((s.assists / s.matchCount).toFixed(1)),
+          avgDamage: Math.round(s.dmg / s.matchCount),
+          avgVision: Number((s.vision / s.matchCount).toFixed(1)),
+          damageEfficiency: Math.round((s.dmg / (s.gold || 1)) * 100),
+          scoreBreakdown: {
+            baseline: Math.round(s.breakdown.base / s.matchCount),
+            vision: Math.round(s.breakdown.vision / s.matchCount),
+            role: Math.round(s.breakdown.dmg / s.matchCount),
+            survival: Math.round(s.breakdown.deaths / s.matchCount),
+          },
+        };
+      })
       .sort((a, b) => b.avgScore - a.avgScore);
 
+    const queueCounts = targetMatches.reduce<Map<number, number>>((counts, match) => {
+      counts.set(match.queueId, (counts.get(match.queueId) || 0) + 1);
+      return counts;
+    }, new Map());
+    const queueDistribution = Array.from(queueCounts.entries()).map(([queueId, count]) => ({
+      queueId,
+      label: QUEUE_LABELS[queueId] || `기타 큐(${queueId})`,
+      count,
+    }));
+    const detectedModes = new Set(
+      targetMatches.map((match) => {
+        if (match.queueId === 450) return 'ARAM';
+        if (SUMMONERS_RIFT_QUEUE_IDS.has(match.queueId)) return 'SUMMONERS_RIFT';
+        return 'OTHER';
+      }),
+    );
+    const context: SquadAiContext = {
+      matchCount: targetMatches.length,
+      mode: detectedModes.size === 1
+        ? Array.from(detectedModes)[0] as SquadAiContext['mode']
+        : 'MIXED',
+      queueDistribution,
+    };
+
     try {
-      // 💡 [핵심 연동] 서버 액션에 selectedCoach 값 넘겨주기 (서버 파일 업데이트 전까지는 무시됨)
-      const report = await getSquadAiFeedback(aiHierarchy, selectedCoach);
+      const report = await getSquadAiFeedback(aiHierarchy, context, selectedCoach);
       setAiReport(report);
     } catch (err) {
       console.error(err);
@@ -683,7 +755,7 @@ function SquadAnalysisContent() {
                             {m.breakdown && (
                               <div className="text-[9px] text-slate-500 font-mono mt-1 flex gap-1 bg-white/5 px-2 py-0.5 rounded-full">
                                 <span className="text-slate-400">
-                                  기본 {Math.floor(m.breakdown.base / m.matchCount)}
+                                  기준 {Math.round(m.breakdown.base / m.matchCount)}
                                 </span>
                                 <span
                                   className={
@@ -691,7 +763,7 @@ function SquadAnalysisContent() {
                                   }
                                 >
                                   {m.breakdown.vision >= 0 ? '+' : ''}
-                                  {Math.floor(m.breakdown.vision / m.matchCount)}시야
+                                  {Math.round(m.breakdown.vision / m.matchCount)}시야
                                 </span>
                                 <span
                                   className={
@@ -699,10 +771,15 @@ function SquadAnalysisContent() {
                                   }
                                 >
                                   {m.breakdown.dmg >= 0 ? '+' : ''}
-                                  {Math.floor(m.breakdown.dmg / m.matchCount)}딜
+                                  {Math.round(m.breakdown.dmg / m.matchCount)}역할
                                 </span>
-                                <span className="text-red-400">
-                                  {Math.floor(m.breakdown.deaths / m.matchCount)}데스
+                                <span
+                                  className={
+                                    m.breakdown.deaths >= 0 ? 'text-emerald-400' : 'text-red-400'
+                                  }
+                                >
+                                  {m.breakdown.deaths >= 0 ? '+' : ''}
+                                  {Math.round(m.breakdown.deaths / m.matchCount)}생존
                                 </span>
                               </div>
                             )}

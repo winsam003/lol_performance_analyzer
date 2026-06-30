@@ -1,6 +1,14 @@
 "use server";
 
-import { getAccount, getLeagueEntries, getMatchDetail, getMatchIds, getSummonerByPuuid } from "@/lib/riot";
+import {
+    getAccount,
+    getLeagueEntries,
+    getMatchDetail,
+    getMatchIds,
+    getSummonerByPuuid,
+    LeagueEntry,
+    RiotMatchDetail,
+} from "@/lib/riot";
 
 export interface MatchParticipant {
     gameName: string;
@@ -11,6 +19,7 @@ export interface MatchParticipant {
 export interface SquadMemberPerformance {
     gameName: string;
     tagLine: string;
+    role: PlayerRole;
     score: number;
     // 계산 근거를 저장할 필드 추가
     breakdown: {
@@ -75,90 +84,213 @@ export interface AnalysisResult {
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-/**
- * 인분 점수 계산 및 상세 내역 반환 로직 (황금 밸런스 패치 완료)
- */
-function calculateContributionScore(p: any) {
-    // 게임 시간(분) 구하기 (Riot API v5 기준 timePlayed 제공, 없으면 기본 30분)
-    const minutes = (p.timePlayed || 1800) / 60;
+export type PlayerRole = "TOP" | "JUNGLE" | "MIDDLE" | "BOTTOM" | "UTILITY" | "UNKNOWN";
 
-    // 1. KDA 기반 기본 점수 (최대치 제한으로 킬 먹방러의 점수 뻥튀기 방지)
-    const rawKda = p.deaths === 0 ? (p.kills + p.assists) * 1.2 : (p.kills + p.assists) / p.deaths;
-    // KDA 효과는 최대 15까지만 적용 (학살해도 무한정 오르지 않음)
-    let baseScore = Math.floor(Math.sqrt(Math.min(rawKda, 15)) * 40);
-    if (p.win) baseScore += 20;
+interface ParticipantChallenges {
+    baronTakedowns?: number;
+    dragonTakedowns?: number;
+    riftHeraldTakedowns?: number;
+    objectivesStolen?: number;
+}
 
-    // 2. 분당 지표(Per Minute)를 활용한 포지션별 기여도 보정
-    const dpm = p.totalDamageDealtToChampions / minutes;       // 분당 딜량
-    const vpm = p.visionScore / minutes;                       // 분당 시야점수
-    const dtpm = p.totalDamageTaken / minutes;                 // 분당 받은 피해량(탱킹)
+interface ScoringParticipant {
+    teamId: number;
+    teamPosition?: string;
+    kills: number;
+    deaths: number;
+    assists: number;
+    goldEarned: number;
+    totalDamageDealtToChampions: number;
+    totalDamageTaken: number;
+    damageSelfMitigated?: number;
+    damageDealtToTurrets?: number;
+    totalMinionsKilled?: number;
+    neutralMinionsKilled?: number;
+    visionScore: number;
+    timeCCingOthers?: number;
+    totalTimeCCDealt?: number;
+    totalHealsOnTeammates?: number;
+    totalDamageShieldedOnTeammates?: number;
+    timePlayed?: number;
+    win: boolean;
+    challenges?: ParticipantChallenges;
+}
 
-    let visionImpact = 0;
-    let dmgImpact = 0;
-    let tankingImpact = 0;
-    let assistImpact = 0;
-    const role = p.teamPosition;
+interface ParticipantMetrics {
+    killParticipation: number;
+    damagePerMinute: number;
+    damageShare: number;
+    damagePerGold: number;
+    tankingPerMinute: number;
+    turretDamagePerMinute: number;
+    csPerMinute: number;
+    visionPerMinute: number;
+    deathsPerMinute: number;
+    ccPerMinute: number;
+    utilityPerMinute: number;
+    objectiveParticipation: number;
+}
 
-    switch (role) {
-        case "BOTTOM": // 원딜 (딜 중심)
-            // DPM 400부터 점수 상승, 최대 45점 (상한선 도입)
-            dmgImpact = Math.min(45, Math.max(0, Math.floor((dpm - 400) / 20)));
-            visionImpact = Math.min(10, Math.max(0, Math.floor(vpm * 10)));
-            break;
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
-        case "MIDDLE": // 미드 (딜 + 맵 리딩)
-            dmgImpact = Math.min(40, Math.max(0, Math.floor((dpm - 350) / 20)));
-            visionImpact = Math.min(15, Math.max(0, Math.floor(vpm * 12)));
-            break;
-
-        case "TOP": // 탑 (탱킹 + 딜 + 스플릿)
-            dmgImpact = Math.min(25, Math.max(0, Math.floor((dpm - 300) / 20)));
-            // DTPM(분당 탱킹) 보너스 최대 25점
-            tankingImpact = Math.min(25, Math.max(0, Math.floor((dtpm - 600) / 40)));
-            visionImpact = Math.min(10, Math.max(0, Math.floor(vpm * 10)));
-            break;
-
-        case "JUNGLE": // 정글 (오브젝트, 갱킹, 시야)
-            dmgImpact = Math.min(20, Math.max(0, Math.floor((dpm - 250) / 25)));
-            tankingImpact = Math.min(15, Math.max(0, Math.floor((dtpm - 500) / 50)));
-            visionImpact = Math.min(20, Math.max(0, Math.floor(vpm * 15)));
-            // 정글은 킬관여(어시스트) 보너스 추가 (최대 10점)
-            assistImpact = Math.min(10, Math.floor(p.assists * 0.8));
-            break;
-
-        case "UTILITY": // 서포터 (시야 + 킬관여 중심)
-            // VPM 최대 35점 보너스 (서포터의 딜량 상한선을 시야가 대체)
-            visionImpact = Math.min(35, Math.max(0, Math.floor((vpm - 1.0) * 14)));
-            // 어시스트 보너스 최대 25점
-            assistImpact = Math.min(25, Math.floor(p.assists * 1.2));
-            dmgImpact = Math.min(10, Math.max(0, Math.floor(dpm / 30)));
-            break;
+const getPlayerRole = (participant: ScoringParticipant): PlayerRole => {
+    const role = participant.teamPosition;
+    if (role === "TOP" || role === "JUNGLE" || role === "MIDDLE" || role === "BOTTOM" || role === "UTILITY") {
+        return role;
     }
+    return "UNKNOWN";
+};
 
-    // 3. 데스 페널티 (트롤링 감별)
-    let deathPenalty = 0;
-    if (role === "TOP" || role === "UTILITY" || role === "JUNGLE") {
-        deathPenalty = Math.floor(p.deaths * 2.0); // 이니시에이터 완화
-    } else {
-        deathPenalty = Math.floor(p.deaths * 2.5); // 딜러 엄격하게 적용
-    }
+const averageMetrics = (metrics: ParticipantMetrics[]): ParticipantMetrics => {
+    const keys = Object.keys(metrics[0]) as Array<keyof ParticipantMetrics>;
+    return keys.reduce<ParticipantMetrics>((result, key) => {
+        result[key] = metrics.reduce((sum, metric) => sum + metric[key], 0) / metrics.length;
+        return result;
+    }, { ...metrics[0] });
+};
 
-    // '지나치게 많이 죽은 뇌절' 추가 페널티 (8데스 이상부터 데스당 2점 추가 감점)
-    if (p.deaths >= 8) {
-        deathPenalty += Math.floor((p.deaths - 7) * 2);
-    }
+const compareMetric = (value: number, reference: number, weight: number, minimumScale: number) => {
+    const scale = Math.max((Math.abs(value) + Math.abs(reference)) / 2, minimumScale);
+    return clamp((value - reference) / scale, -1, 1) * weight;
+};
 
-    const finalScore = baseScore + visionImpact + dmgImpact + tankingImpact + assistImpact - deathPenalty;
+const getParticipantMetrics = (
+    participant: ScoringParticipant,
+    participants: ScoringParticipant[],
+): ParticipantMetrics => {
+    const minutes = Math.max((participant.timePlayed || 1800) / 60, 1);
+    const teammates = participants.filter(member => member.teamId === participant.teamId);
+    const teamKills = teammates.reduce((sum, member) => sum + member.kills, 0);
+    const teamDamage = teammates.reduce((sum, member) => sum + member.totalDamageDealtToChampions, 0);
+    const challenges = participant.challenges;
 
     return {
-        score: Math.max(5, Math.min(250, finalScore)),
-        breakdown: {
-            base: baseScore + assistImpact, // 어시스트 보너스는 기본 점수에 병합 표시
-            vision: visionImpact,
-            dmg: dmgImpact + tankingImpact, // 탱킹은 전투 기여도로 딜에 병합 표시
-            deaths: -deathPenalty
-        }
+        killParticipation: teamKills > 0 ? (participant.kills + participant.assists) / teamKills : 0,
+        damagePerMinute: participant.totalDamageDealtToChampions / minutes,
+        damageShare: teamDamage > 0 ? participant.totalDamageDealtToChampions / teamDamage : 0,
+        damagePerGold: participant.totalDamageDealtToChampions / Math.max(participant.goldEarned, 1),
+        tankingPerMinute:
+            (participant.totalDamageTaken + (participant.damageSelfMitigated || 0) * 0.5) / minutes,
+        turretDamagePerMinute: (participant.damageDealtToTurrets || 0) / minutes,
+        csPerMinute:
+            ((participant.totalMinionsKilled || 0) + (participant.neutralMinionsKilled || 0)) / minutes,
+        visionPerMinute: participant.visionScore / minutes,
+        deathsPerMinute: participant.deaths / minutes,
+        ccPerMinute: (participant.timeCCingOthers ?? participant.totalTimeCCDealt ?? 0) / minutes,
+        utilityPerMinute:
+            ((participant.totalHealsOnTeammates || 0) +
+                (participant.totalDamageShieldedOnTeammates || 0)) /
+            minutes,
+        objectiveParticipation:
+            (challenges?.dragonTakedowns || 0) +
+            (challenges?.baronTakedowns || 0) +
+            (challenges?.riftHeraldTakedowns || 0) +
+            (challenges?.objectivesStolen || 0) * 2,
     };
+};
+
+/**
+ * 동일 경기의 상대 동일 포지션을 기준으로 기여도를 평가한다.
+ * 포지션 정보가 없는 모드는 상대 팀 평균을 기준으로 평가한다.
+ */
+function calculateContributionScore(
+    participant: ScoringParticipant,
+    participants: ScoringParticipant[],
+) {
+    const role = getPlayerRole(participant);
+    const metrics = getParticipantMetrics(participant, participants);
+    const sameRoleOpponents = participants.filter(
+        member => member.teamId !== participant.teamId && getPlayerRole(member) === role,
+    );
+    const referencePlayers = sameRoleOpponents.length > 0
+        ? sameRoleOpponents
+        : participants.filter(member => member.teamId !== participant.teamId);
+    const reference = averageMetrics(
+        referencePlayers.map(member => getParticipantMetrics(member, participants)),
+    );
+
+    let baseImpact = compareMetric(metrics.killParticipation, reference.killParticipation, 8, 0.15);
+    let visionImpact = 0;
+    let damageImpact = 0;
+
+    switch (role) {
+        case "TOP":
+            damageImpact += compareMetric(metrics.damagePerMinute, reference.damagePerMinute, 8, 100);
+            damageImpact += compareMetric(metrics.damageShare, reference.damageShare, 5, 0.05);
+            damageImpact += compareMetric(metrics.damagePerGold, reference.damagePerGold, 4, 0.2);
+            damageImpact += compareMetric(metrics.tankingPerMinute, reference.tankingPerMinute, 5, 100);
+            damageImpact += compareMetric(metrics.turretDamagePerMinute, reference.turretDamagePerMinute, 4, 10);
+            damageImpact += compareMetric(metrics.csPerMinute, reference.csPerMinute, 4, 1);
+            visionImpact += compareMetric(metrics.visionPerMinute, reference.visionPerMinute, 4, 0.1);
+            break;
+        case "JUNGLE":
+            baseImpact += compareMetric(
+                metrics.objectiveParticipation,
+                reference.objectiveParticipation,
+                10,
+                0.5,
+            );
+            damageImpact += compareMetric(metrics.damagePerMinute, reference.damagePerMinute, 6, 100);
+            damageImpact += compareMetric(metrics.damageShare, reference.damageShare, 3, 0.05);
+            damageImpact += compareMetric(metrics.damagePerGold, reference.damagePerGold, 3, 0.2);
+            damageImpact += compareMetric(metrics.tankingPerMinute, reference.tankingPerMinute, 3, 100);
+            damageImpact += compareMetric(metrics.csPerMinute, reference.csPerMinute, 4, 1);
+            visionImpact += compareMetric(metrics.visionPerMinute, reference.visionPerMinute, 8, 0.1);
+            break;
+        case "MIDDLE":
+            damageImpact += compareMetric(metrics.damagePerMinute, reference.damagePerMinute, 10, 100);
+            damageImpact += compareMetric(metrics.damageShare, reference.damageShare, 6, 0.05);
+            damageImpact += compareMetric(metrics.damagePerGold, reference.damagePerGold, 4, 0.2);
+            damageImpact += compareMetric(metrics.turretDamagePerMinute, reference.turretDamagePerMinute, 2, 10);
+            damageImpact += compareMetric(metrics.csPerMinute, reference.csPerMinute, 4, 1);
+            visionImpact += compareMetric(metrics.visionPerMinute, reference.visionPerMinute, 5, 0.1);
+            break;
+        case "BOTTOM":
+            damageImpact += compareMetric(metrics.damagePerMinute, reference.damagePerMinute, 12, 100);
+            damageImpact += compareMetric(metrics.damageShare, reference.damageShare, 8, 0.05);
+            damageImpact += compareMetric(metrics.damagePerGold, reference.damagePerGold, 6, 0.2);
+            damageImpact += compareMetric(metrics.turretDamagePerMinute, reference.turretDamagePerMinute, 3, 10);
+            damageImpact += compareMetric(metrics.csPerMinute, reference.csPerMinute, 5, 1);
+            visionImpact += compareMetric(metrics.visionPerMinute, reference.visionPerMinute, 3, 0.1);
+            break;
+        case "UTILITY":
+            baseImpact += compareMetric(metrics.ccPerMinute, reference.ccPerMinute, 7, 5);
+            baseImpact += compareMetric(metrics.utilityPerMinute, reference.utilityPerMinute, 7, 10);
+            damageImpact += compareMetric(metrics.damagePerMinute, reference.damagePerMinute, 3, 50);
+            damageImpact += compareMetric(metrics.damageShare, reference.damageShare, 2, 0.03);
+            visionImpact += compareMetric(metrics.visionPerMinute, reference.visionPerMinute, 14, 0.1);
+            break;
+        case "UNKNOWN":
+            damageImpact += compareMetric(metrics.damagePerMinute, reference.damagePerMinute, 10, 100);
+            damageImpact += compareMetric(metrics.damageShare, reference.damageShare, 8, 0.05);
+            damageImpact += compareMetric(metrics.damagePerGold, reference.damagePerGold, 5, 0.2);
+            baseImpact += compareMetric(metrics.ccPerMinute, reference.ccPerMinute, 4, 5);
+            visionImpact += compareMetric(metrics.visionPerMinute, reference.visionPerMinute, 3, 0.1);
+            break;
+    }
+
+    const survivalWeight = role === "BOTTOM" || role === "UTILITY" ? 12 : 10;
+    const survivalImpact = -compareMetric(
+        metrics.deathsPerMinute,
+        reference.deathsPerMinute,
+        survivalWeight,
+        0.05,
+    );
+    const outcomeImpact = participant.win ? 3 : -3;
+    const breakdown = {
+        base: Math.round(100 + outcomeImpact + baseImpact),
+        vision: Math.round(visionImpact),
+        dmg: Math.round(damageImpact),
+        deaths: Math.round(survivalImpact),
+    };
+    const rawScore = breakdown.base + breakdown.vision + breakdown.dmg + breakdown.deaths;
+    const score = clamp(rawScore, 40, 160);
+
+    if (score !== rawScore) {
+        breakdown.base += score - rawScore;
+    }
+
+    return { score, breakdown };
 }
 
 export async function analyzeSummoner(gameName: string, tagLine: string): Promise<AnalysisResult | null> {
@@ -169,16 +301,17 @@ export async function analyzeSummoner(gameName: string, tagLine: string): Promis
         const summoner = await getSummonerByPuuid(account.puuid);
         if (!summoner) return null;
 
-        let leagues: any[] = [];
+        let leagues: LeagueEntry[] = [];
         try {
             leagues = await getLeagueEntries(account.puuid) || [];
-        } catch (lError: any) {
-            console.warn(`⚠️ 리그 조회 실패:`, lError.message);
+        } catch (lError: unknown) {
+            const message = lError instanceof Error ? lError.message : String(lError);
+            console.warn(`⚠️ 리그 조회 실패:`, message);
             leagues = [];
         }
 
-        const soloRank = leagues.find((l: any) => l.queueType === "RANKED_SOLO_5x5");
-        const flexRank = leagues.find((l: any) => l.queueType === "RANKED_FLEX_SR");
+        const soloRank = leagues.find(league => league.queueType === "RANKED_SOLO_5x5");
+        const flexRank = leagues.find(league => league.queueType === "RANKED_FLEX_SR");
         const mainLeague = soloRank || flexRank;
 
         const profile: SummonerProfile = {
@@ -196,7 +329,7 @@ export async function analyzeSummoner(gameName: string, tagLine: string): Promis
         };
 
         const matchIds = await getMatchIds(account.puuid, 20);
-        const matchesRaw = [];
+        const matchesRaw: Array<RiotMatchDetail | null> = [];
 
         const chunkSize = 4;
 
@@ -214,23 +347,26 @@ export async function analyzeSummoner(gameName: string, tagLine: string): Promis
             }
         }
 
-        const filteredMatchesRaw = matchesRaw.filter(Boolean);
+        const filteredMatchesRaw = matchesRaw.filter(
+            (match): match is RiotMatchDetail => match !== null,
+        );
 
         const analyzedMatches: AnalyzedMatch[] = filteredMatchesRaw
             .filter((m) => m && m.info)
             .map((match) => {
-                const participant = match.info.participants.find((p: any) => p.puuid === account.puuid);
+                const participant = match.info.participants.find(p => p.puuid === account.puuid);
                 if (!participant) return null;
 
                 const now = Date.now();
                 const hoursAgo = Math.floor((now - match.info.gameEndTimestamp) / (1000 * 60 * 60));
                 const dateStr = hoursAgo < 24 ? `${hoursAgo}시간 전` : `${Math.floor(hoursAgo / 24)}일 전`;
 
-                const allParticipants: SquadMemberPerformance[] = match.info.participants.map((p: any) => {
-                    const analysis = calculateContributionScore(p);
+                const allParticipants: SquadMemberPerformance[] = match.info.participants.map(p => {
+                    const analysis = calculateContributionScore(p, match.info.participants);
                     return {
-                        gameName: p.riotIdGameName || p.summonerName,
+                        gameName: p.riotIdGameName || p.summonerName || "Unknown",
                         tagLine: p.riotIdTagline || "KR1",
+                        role: getPlayerRole(p),
                         score: analysis.score,
                         breakdown: analysis.breakdown,
                         kda: `${p.kills}/${p.deaths}/${p.assists}`,
@@ -250,7 +386,7 @@ export async function analyzeSummoner(gameName: string, tagLine: string): Promis
                     };
                 });
 
-                const mainAnalysis = calculateContributionScore(participant);
+                const mainAnalysis = calculateContributionScore(participant, match.info.participants);
 
                 return {
                     id: match.metadata.matchId,
@@ -267,8 +403,8 @@ export async function analyzeSummoner(gameName: string, tagLine: string): Promis
                     breakdown: mainAnalysis.breakdown,
                     date: dateStr,
                     tags: [],
-                    participants: match.info.participants.map((p: any) => ({
-                        gameName: p.riotIdGameName || p.summonerName,
+                    participants: match.info.participants.map(p => ({
+                        gameName: p.riotIdGameName || p.summonerName || "Unknown",
                         tagLine: p.riotIdTagline || "KR1",
                         championName: p.championName
                     })),
@@ -285,7 +421,7 @@ export async function analyzeSummoner(gameName: string, tagLine: string): Promis
             .filter((m): m is AnalyzedMatch => m !== null);
 
         return { profile, matches: analyzedMatches };
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("❌ 분석 중 치명적 에러 발생:", error);
         return null;
     }
