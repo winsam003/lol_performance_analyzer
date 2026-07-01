@@ -1,15 +1,42 @@
 const API_KEY = process.env.NEXT_PUBLIC_RIOT_API_KEY || process.env.RIOT_API_KEY;
 const REGION = "kr"; // Platform routing value (e.g., kr, na1)
 const MASS_REGION = "asia"; // Regional routing value (e.g., asia, americas)
+const MAX_RATE_LIMIT_RETRIES = 2;
+const MAX_RATE_LIMIT_WAIT_MS = 10_000;
+let rateLimitUntil = 0;
 
-const fetchWithAuth = async <T>(url: string): Promise<T | null> => {
+const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+const getRetryAfterMs = (retryAfter: string | null, attempt: number) => {
+    if (retryAfter) {
+        const seconds = Number(retryAfter);
+        if (Number.isFinite(seconds)) return Math.max(seconds * 1000, 1000);
+
+        const retryDate = Date.parse(retryAfter);
+        if (Number.isFinite(retryDate)) return Math.max(retryDate - Date.now(), 1000);
+    }
+
+    return 1000 * (2 ** attempt);
+};
+
+const fetchWithAuth = async <T>(
+    url: string,
+    revalidateSeconds: number,
+    attempt: number = 0,
+): Promise<T | null> => {
     const cleanKey = API_KEY?.trim();
+    const pendingRateLimitMs = Math.max(rateLimitUntil - Date.now(), 0);
+
+    if (pendingRateLimitMs > MAX_RATE_LIMIT_WAIT_MS) {
+        throw new Error(`Riot API 요청 제한 중입니다. ${Math.ceil(pendingRateLimitMs / 1000)}초 후 다시 시도해주세요.`);
+    }
+    if (pendingRateLimitMs > 0) await wait(pendingRateLimitMs);
 
     const res = await fetch(url, {
         headers: {
             "X-Riot-Token": cleanKey || "",
         },
-        cache: "no-store", // Disable cache to debug missing fields
+        next: { revalidate: revalidateSeconds },
     });
 
     if (!res.ok) {
@@ -17,6 +44,19 @@ const fetchWithAuth = async <T>(url: string): Promise<T | null> => {
         console.error(`[RIOT_ERROR_BODY] ${errorBody}`);
 
         if (res.status === 404) return null;
+        if (res.status === 429) {
+            const retryAfterMs = getRetryAfterMs(res.headers.get("retry-after"), attempt);
+            rateLimitUntil = Math.max(rateLimitUntil, Date.now() + retryAfterMs);
+
+            if (attempt < MAX_RATE_LIMIT_RETRIES && retryAfterMs <= MAX_RATE_LIMIT_WAIT_MS) {
+                await wait(retryAfterMs);
+                return fetchWithAuth<T>(url, revalidateSeconds, attempt + 1);
+            }
+
+            throw new Error(
+                `Riot API 요청 한도를 초과했습니다. ${Math.ceil(retryAfterMs / 1000)}초 후 다시 시도해주세요.`,
+            );
+        }
         throw new Error(`Riot API Error: ${res.status} ${res.statusText} at ${url}`);
     }
 
@@ -111,12 +151,12 @@ export interface RiotMatchDetail {
 
 export const getAccount = async (gameName: string, tagLine: string): Promise<RiotAccount | null> => {
     const url = `https://${MASS_REGION}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(gameName)}/${encodeURIComponent(tagLine)}`;
-    return fetchWithAuth<RiotAccount>(url);
+    return fetchWithAuth<RiotAccount>(url, 300);
 };
 
 export const getSummonerByPuuid = async (puuid: string): Promise<RiotSummoner | null> => {
     const url = `https://${REGION}.api.riotgames.com/lol/summoner/v4/summoners/by-puuid/${puuid}`;
-    const data = await fetchWithAuth<RiotSummoner>(url);
+    const data = await fetchWithAuth<RiotSummoner>(url, 300);
 
     if (!data) return null;
 
@@ -146,7 +186,7 @@ export async function getLeagueEntries(puuid: string): Promise<LeagueEntry[]> {
     // const url = `https://${REGION}.api.riotgames.com/lol/league/v4/entries/by-summoner/${encryptedSummonerId}`;
     const url = `https://kr.api.riotgames.com/lol/league/v4/entries/by-puuid/${puuid}`;
     try {
-        const data = await fetchWithAuth<LeagueEntry[]>(url);
+        const data = await fetchWithAuth<LeagueEntry[]>(url, 60);
         return data || [];
     } catch (error) {
         console.warn(`[RIOT_LEAGUE_WARNING] Failed to fetch league entries: ${error}`);
@@ -156,11 +196,11 @@ export async function getLeagueEntries(puuid: string): Promise<LeagueEntry[]> {
 
 export const getMatchIds = async (puuid: string, count: number = 20): Promise<string[]> => {
     const url = `https://${MASS_REGION}.api.riotgames.com/lol/match/v5/matches/by-puuid/${puuid}/ids?start=0&count=${count}`;
-    const data = await fetchWithAuth<string[]>(url);
+    const data = await fetchWithAuth<string[]>(url, 60);
     return data || [];
 };
 
 export const getMatchDetail = async (matchId: string): Promise<RiotMatchDetail | null> => {
     const url = `https://${MASS_REGION}.api.riotgames.com/lol/match/v5/matches/${matchId}`;
-    return fetchWithAuth<RiotMatchDetail>(url);
+    return fetchWithAuth<RiotMatchDetail>(url, 86_400);
 };

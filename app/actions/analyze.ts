@@ -35,6 +35,13 @@ export interface SquadMemberPerformance {
     win: boolean;
     championName: string;
     visionScore: number;
+    metrics: ParticipantMetrics;
+    objectives: {
+        dragons: number;
+        barons: number;
+        heralds: number;
+        steals: number;
+    };
 }
 
 export interface AnalyzedMatch {
@@ -116,17 +123,21 @@ interface ScoringParticipant {
     challenges?: ParticipantChallenges;
 }
 
-interface ParticipantMetrics {
+export interface ParticipantMetrics {
     killParticipation: number;
     damagePerMinute: number;
     damageShare: number;
     damagePerGold: number;
+    damageTakenPerMinute: number;
+    damageMitigatedPerMinute: number;
     tankingPerMinute: number;
     turretDamagePerMinute: number;
     csPerMinute: number;
     visionPerMinute: number;
     deathsPerMinute: number;
     ccPerMinute: number;
+    healingPerMinute: number;
+    shieldingPerMinute: number;
     utilityPerMinute: number;
     objectiveParticipation: number;
 }
@@ -169,6 +180,8 @@ const getParticipantMetrics = (
         damagePerMinute: participant.totalDamageDealtToChampions / minutes,
         damageShare: teamDamage > 0 ? participant.totalDamageDealtToChampions / teamDamage : 0,
         damagePerGold: participant.totalDamageDealtToChampions / Math.max(participant.goldEarned, 1),
+        damageTakenPerMinute: participant.totalDamageTaken / minutes,
+        damageMitigatedPerMinute: (participant.damageSelfMitigated || 0) / minutes,
         tankingPerMinute:
             (participant.totalDamageTaken + (participant.damageSelfMitigated || 0) * 0.5) / minutes,
         turretDamagePerMinute: (participant.damageDealtToTurrets || 0) / minutes,
@@ -177,6 +190,8 @@ const getParticipantMetrics = (
         visionPerMinute: participant.visionScore / minutes,
         deathsPerMinute: participant.deaths / minutes,
         ccPerMinute: (participant.timeCCingOthers ?? participant.totalTimeCCDealt ?? 0) / minutes,
+        healingPerMinute: (participant.totalHealsOnTeammates || 0) / minutes,
+        shieldingPerMinute: (participant.totalDamageShieldedOnTeammates || 0) / minutes,
         utilityPerMinute:
             ((participant.totalHealsOnTeammates || 0) +
                 (participant.totalDamageShieldedOnTeammates || 0)) /
@@ -290,7 +305,7 @@ function calculateContributionScore(
         breakdown.base += score - rawScore;
     }
 
-    return { score, breakdown };
+    return { score, breakdown, metrics };
 }
 
 export async function analyzeSummoner(gameName: string, tagLine: string): Promise<AnalysisResult | null> {
@@ -331,7 +346,7 @@ export async function analyzeSummoner(gameName: string, tagLine: string): Promis
         const matchIds = await getMatchIds(account.puuid, 20);
         const matchesRaw: Array<RiotMatchDetail | null> = [];
 
-        const chunkSize = 4;
+        const chunkSize = 3;
 
         for (let i = 0; i < matchIds.length; i += chunkSize) {
             const chunk = matchIds.slice(i, i + chunkSize);
@@ -343,7 +358,7 @@ export async function analyzeSummoner(gameName: string, tagLine: string): Promis
             matchesRaw.push(...chunkResults);
 
             if (i + chunkSize < matchIds.length) {
-                await delay(150);
+                await delay(750);
             }
         }
 
@@ -382,7 +397,14 @@ export async function analyzeSummoner(gameName: string, tagLine: string): Promis
                         gold: p.goldEarned,
                         win: p.win,
                         championName: p.championName,
-                        visionScore: p.visionScore
+                        visionScore: p.visionScore,
+                        metrics: analysis.metrics,
+                        objectives: {
+                            dragons: p.challenges?.dragonTakedowns || 0,
+                            barons: p.challenges?.baronTakedowns || 0,
+                            heralds: p.challenges?.riftHeraldTakedowns || 0,
+                            steals: p.challenges?.objectivesStolen || 0,
+                        },
                     };
                 });
 
