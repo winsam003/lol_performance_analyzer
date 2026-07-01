@@ -132,7 +132,86 @@ const TITLES = {
           title: '억울한 희생양',
           desc: '지표는 가장 낮지만, 승리를 위해 보이지 않는 곳에서 헌신함',
           color: 'purple',
-        },
+  },
+};
+
+const IDENTITY_TITLE_POOLS = {
+  terminal: ['인간 넥서스', '이동식 현상금 ATM', '적팀 복지재단 이사장', '죽음의 회전문 관리자'],
+  disaster: ['협곡의 재앙', '패배 지분 최대주주', '팀 골드 긴급재난문자', '15분 서렌 명예홍보대사'],
+  god: ['강림한 신(GOD)', '매칭 시스템의 사과문', '혼자 장르가 다른 사람', '승리 외주 독점사업자'],
+  lehman: ['협곡의 리먼 브라더스', '딜 효율 상장폐지', '골드 증발 감사위원장', '투자 대비 수익률 실종자'],
+  waste: ['폐급 폐기물', '기여도 측정기 오류 원인', '팀 슬롯 무상임대자', '통계청 집계 제외 대상'],
+  topTank: ['국가대표 고기방패', '상체 산업재해 방지벽', '탑라인 철근 콘크리트', '한타용 이동식 방음벽'],
+  topEfficient: ['강화 대리석 척추', '저비용 고효율 국밥탑', '상체 가성비 심사위원', '탑라인 원가절감 전문가'],
+  topSolo: ['고독한 탑신병자', '탑라인 1인 가구', '협곡 북부 독립정부', '지원금 없이 큰 자영업자'],
+  topIsland: ['탑 지박령', '텔레포트 미가입 고객', '상체 장기주차 차량', '협곡 북부 자연인'],
+  topPaper: ['친환경 종이박스', '한타 전용 완충 포장재', '방어력 무첨가 탑솔러', '맞으면 접히는 폴더블 탑'],
+  jungleAssist: ['협곡의 홍길동', '전 라인 출장 서비스', '킬 관여 출장뷔페 사장', '어시스트 유통 총판'],
+  jungleCarry: ['스쿼드 실질적 가장', '정글 차이 공식 납품업체', '전 라인 생활비 지급자', '승리 배달 플랫폼 기사'],
+  junglePve: ['야생 버섯 채집가', '정글몹 전담 공무원', '갱킹 없는 친환경 정글러', '캠프 순환근무 모범사원'],
+  jungleVision: ['바론/용 세콤(SECOM)', '오브젝트 CCTV 관제센터', '강가 방범대 총책임자', '용 앞 주차단속반장'],
+  jungleDeath: ['보호구역 멸종위기 백정', '카정 피해 신고센터장', '정글 동선 무료공개자', '적 정글 성장지원 담당관'],
+  midValue: ['가성비 권익위원회장', '미드라인 창조경제부 장관', '저예산 고화력 연구소장', '골드 대비 딜량 감사원장'],
+  midEmperor: ['황족 미드', '중앙선거 압승 후보', '미드 통행세 징수원', '협곡 중앙정부 대통령'],
+  midAccounting: ['KDA 분식회계사', '딜량 장부 누락 담당자', '킬 세탁 전문 세무사', '스코어보드 미화 전문가'],
+  midTax: ['세금 포탈 상습범', '미드 지원금 부정수급자', '골드 먹튀 특별관리대상', '딜 납부 장기체납자'],
+  midRoad: ['고속도로 프리패스', '미드 1차 개방사업자', '로밍 맛집 공식 지정점', '중앙선 무인 통과 게이트'],
+  adcEfficient: ['풀악셀 7성구 기사', '원딜 투자수익률 1위', '평타 복리 투자 전문가', '골드당 화력 최저가 보장'],
+  adcCeo: ['대기업 전문 경영인', '후반 캐리 지주회사 회장', '딜량 코스피 시가총액 1위', '원딜 산업단지 대표이사'],
+  adcCircus: ['외줄타기 서커스단장', '생존과 딜의 선물거래자', '한타 심박수 총괄책임자', '목숨 담보 풀매수 전문가'],
+  adcGlass: ['유리대포 시한폭탄', '보호자 동반 필수 딜러', '클릭 한 번에 파손주의', '생존보험 가입 거절 고객'],
+  adcBankrupt: ['국가부도 주범', '원딜 성장예산 유용자', '후반 캐리 납품 지연업체', '골드 블랙홀 운영위원장'],
+  supportVision: ['어둠 속의 눈동자', '협곡 CCTV 통합관제실장', '시야정보원 비공식 국장', '부시 조명사업 총괄본부장'],
+  supportAssist: ['마더 테레사', '어시스트 무상급식소장', '킬 배달 무료봉사자', '팀원 KDA 복지부 장관'],
+  supportKill: ['합법적 강도', '킬 압류 집행관', '원딜 월급 가압류 담당자', '막타 민영화 추진위원장'],
+  supportBlind: ['장님 안내견 가출', '와드 구매 선택적 기억상실', '시야석 포장 미개봉 고객', '미니맵 개인정보 보호위원'],
+  supportSaving: ['와드 아끼다 집 장만', '제어와드 긴축재정부 장관', '75골드 절약운동 본부장', '시야예산 삭감 전문위원'],
+  supportCreator: ['협곡의 창조주', '팀원 가치상승 컨설턴트', '한타 설계 특허 보유자', '캐리 제조업 명장'],
+  ace: ['에이스(ACE)', '승리 지분 과점주주', '팀 성적 우량채권', '매칭 성공사례 1호'],
+  breadwinner: ['소년가장', '4인 가족 부양책임자', '팀 전력비 대납자', '승점 생계형 노동자'],
+  carry: ['승리의 주역', '한타 실적 우수사원', '승리 납품 우수업체', '팀 기여도 모범납세자'],
+  wanted: ['지명수배자', '패배 원인 참고인 1호', '리플레이 출석 요구 대상', '감독 면담 우선예약자'],
+  mascot: ['행복롤 깍두기', '팀 분위기 전담 인턴', '승패 무관 관광홍보대사', '스쿼드 단체사진 필수인원'],
+  value: ['가성비 괴물', '골드 효율 공인중개사', '저예산 캐리 납품업자', '협곡 다이소 명예점장'],
+  vision: ['인간 와드', '이동식 미니맵 확장팩', '부시 실명제 추진위원', '협곡 조명공사 현장소장'],
+  deaths: ['300원 맛집', '현상금 무한리필 식당', '적팀 성장쿠폰 발급기', '귀환보다 빠른 회색화면'],
+  kills: ['학살자', '킬 로그 도배 전문업체', '적팀 화면 흑백화 기사', '300원 수금 대행업자'],
+  assists: ['친절한 이웃', '킬 관여 도장깨기 장인', '어시스트 공동구매 총대', '팀 KDA 품앗이 회장'],
+  citizen: ['평범한 시민', '협곡 중산층 직장인', '정시 출근 정시 퇴근형', '무난함 품질인증 통과자'],
+} as const;
+
+type IdentityTitleKey = keyof typeof IDENTITY_TITLE_POOLS;
+
+interface IdentityStats {
+  name: string;
+  tag: string;
+  avgScore: number;
+  avgKills: string;
+  avgDeaths: string;
+  avgAssists: string;
+  avgVision: string;
+  efficiency: number;
+  role: string;
+}
+
+const pickIdentityTitle = (key: IdentityTitleKey, member: IdentityStats) => {
+  const seed = [
+    member.name,
+    member.tag,
+    member.avgScore,
+    member.avgKills,
+    member.avgDeaths,
+    member.avgAssists,
+    member.avgVision,
+    member.efficiency,
+    key,
+  ].join(':');
+  const hash = Array.from(seed).reduce((value, character) => {
+    return (value * 31 + character.charCodeAt(0)) >>> 0;
+  }, 0);
+  const titles = IDENTITY_TITLE_POOLS[key];
+
+  return titles[hash % titles.length];
 };
 
 function SquadAnalysisContent() {
@@ -376,7 +455,7 @@ function SquadAnalysisContent() {
     }
   };
 
-  const getIdentity = (m: any, idx: number, total: number) => {
+  const getIdentity = (m: IdentityStats, idx: number, total: number) => {
     const k = Number(m.avgKills);
     const d = Number(m.avgDeaths);
     const a = Number(m.avgAssists);
@@ -391,58 +470,63 @@ function SquadAnalysisContent() {
     const isAdc = r.includes('ADC') || r.includes('BOTTOM');
     const isSup = r.includes('SUP') || r.includes('UTILITY');
 
-    if (d >= 12) return { label: '인간 넥서스', color: 'bg-red-950' };
-    if (d >= 9 && score < 80) return { label: '협곡의 재앙', color: 'bg-red-900' };
-    if (idx === 0 && score >= 150) return { label: '강림한 신(GOD)', color: 'bg-purple-600' };
-    if (eff < 30) return { label: '협곡의 리먼 브라더스', color: 'bg-stone-800' };
-    if (idx === total - 1 && score < 60) return { label: '폐급 폐기물', color: 'bg-red-800' };
+    const identity = (key: IdentityTitleKey, color: string) => ({
+      label: pickIdentityTitle(key, m),
+      color,
+    });
+
+    if (d >= 12) return identity('terminal', 'bg-red-950');
+    if (d >= 9 && score < 80) return identity('disaster', 'bg-red-900');
+    if (idx === 0 && score >= 150) return identity('god', 'bg-purple-600');
+    if (eff < 30) return identity('lehman', 'bg-stone-800');
+    if (idx === total - 1 && score < 60) return identity('waste', 'bg-red-800');
 
     if (isTop) {
-      if (score >= 120 && eff > 100) return { label: '국가대표 고기방패', color: 'bg-blue-700' };
-      if (eff > 110 && d < 5) return { label: '강화 대리석 척추', color: 'bg-emerald-600' };
-      if (a <= 3 && score >= 100) return { label: '고독한 탑신병자', color: 'bg-slate-700' };
-      if (k + a <= 4 && score < 90) return { label: '탑 지박령', color: 'bg-stone-700' };
-      if (d >= 8) return { label: '친환경 종이박스', color: 'bg-orange-700' };
+      if (score >= 120 && eff > 100) return identity('topTank', 'bg-blue-700');
+      if (eff > 110 && d < 5) return identity('topEfficient', 'bg-emerald-600');
+      if (a <= 3 && score >= 100) return identity('topSolo', 'bg-slate-700');
+      if (k + a <= 4 && score < 90) return identity('topIsland', 'bg-stone-700');
+      if (d >= 8) return identity('topPaper', 'bg-orange-700');
     } else if (isJng) {
-      if (a >= 12 && score >= 110) return { label: '협곡의 홍길동', color: 'bg-sky-600' };
-      if (k >= 8 && score >= 120) return { label: '스쿼드 실질적 가장', color: 'bg-emerald-500' };
-      if (eff < 60 && a < 5) return { label: '야생 버섯 채집가', color: 'bg-green-800' };
-      if (v >= 30) return { label: '바론/용 세콤(SECOM)', color: 'bg-cyan-700' };
-      if (d >= 7) return { label: '보호구역 멸종위기 백정', color: 'bg-stone-600' };
+      if (a >= 12 && score >= 110) return identity('jungleAssist', 'bg-sky-600');
+      if (k >= 8 && score >= 120) return identity('jungleCarry', 'bg-emerald-500');
+      if (eff < 60 && a < 5) return identity('junglePve', 'bg-green-800');
+      if (v >= 30) return identity('jungleVision', 'bg-cyan-700');
+      if (d >= 7) return identity('jungleDeath', 'bg-stone-600');
     } else if (isMid) {
       if (eff >= 140 && score >= 110)
-        return { label: '가성비 권익위원회장', color: 'bg-emerald-500' };
-      if (k >= 10 && score >= 120) return { label: '황족 미드', color: 'bg-purple-500' };
-      if (k > 5 && eff < 70) return { label: 'KDA 분식회계사', color: 'bg-rose-700' };
-      if (eff < 60 && score < 90) return { label: '세금 포탈 상습범', color: 'bg-orange-600' };
-      if (d >= 8) return { label: '고속도로 프리패스', color: 'bg-red-700' };
+        return identity('midValue', 'bg-emerald-500');
+      if (k >= 10 && score >= 120) return identity('midEmperor', 'bg-purple-500');
+      if (k > 5 && eff < 70) return identity('midAccounting', 'bg-rose-700');
+      if (eff < 60 && score < 90) return identity('midTax', 'bg-orange-600');
+      if (d >= 8) return identity('midRoad', 'bg-red-700');
     } else if (isAdc) {
-      if (eff >= 130 && score >= 120) return { label: '풀악셀 7성구 기사', color: 'bg-sky-500' };
-      if (k >= 12) return { label: '대기업 전문 경영인', color: 'bg-emerald-600' };
-      if (d >= 8 && k >= 8) return { label: '외줄타기 서커스단장', color: 'bg-rose-600' };
-      if (d >= 8) return { label: '유리대포 시한폭탄', color: 'bg-red-600' };
-      if (eff < 60 && score < 90) return { label: '국가부도 주범', color: 'bg-stone-700' };
+      if (eff >= 130 && score >= 120) return identity('adcEfficient', 'bg-sky-500');
+      if (k >= 12) return identity('adcCeo', 'bg-emerald-600');
+      if (d >= 8 && k >= 8) return identity('adcCircus', 'bg-rose-600');
+      if (d >= 8) return identity('adcGlass', 'bg-red-600');
+      if (eff < 60 && score < 90) return identity('adcBankrupt', 'bg-stone-700');
     } else if (isSup) {
-      if (v >= 40 && score >= 110) return { label: '어둠 속의 눈동자', color: 'bg-cyan-600' };
-      if (a >= 20) return { label: '마더 테레사', color: 'bg-yellow-600' };
-      if (k >= 6 && a < 10) return { label: '합법적 강도', color: 'bg-rose-700' };
-      if (v < 15 && score < 90) return { label: '장님 안내견 가출', color: 'bg-slate-800' };
-      if (v < 25) return { label: '와드 아끼다 집 장만', color: 'bg-stone-600' };
-      if (score >= 120) return { label: '협곡의 창조주', color: 'bg-purple-500' };
+      if (v >= 40 && score >= 110) return identity('supportVision', 'bg-cyan-600');
+      if (a >= 20) return identity('supportAssist', 'bg-yellow-600');
+      if (k >= 6 && a < 10) return identity('supportKill', 'bg-rose-700');
+      if (v < 15 && score < 90) return identity('supportBlind', 'bg-slate-800');
+      if (v < 25) return identity('supportSaving', 'bg-stone-600');
+      if (score >= 120) return identity('supportCreator', 'bg-purple-500');
     }
 
-    if (idx === 0 && score >= 115) return { label: '에이스(ACE)', color: 'bg-blue-600' };
-    if (idx === 0) return { label: '소년가장', color: 'bg-sky-700' };
-    if (score >= 120) return { label: '승리의 주역', color: 'bg-blue-500' };
-    if (idx === total - 1 && score < 85) return { label: '지명수배자', color: 'bg-red-600' };
-    if (idx === total - 1) return { label: '행복롤 깍두기', color: 'bg-orange-500' };
-    if (eff >= 120) return { label: '가성비 괴물', color: 'bg-emerald-500' };
-    if (v >= 35) return { label: '인간 와드', color: 'bg-cyan-600' };
-    if (d >= 8) return { label: '300원 맛집', color: 'bg-red-600' };
-    if (k >= 10) return { label: '학살자', color: 'bg-rose-600' };
-    if (a >= 15) return { label: '친절한 이웃', color: 'bg-yellow-600' };
+    if (idx === 0 && score >= 115) return identity('ace', 'bg-blue-600');
+    if (idx === 0) return identity('breadwinner', 'bg-sky-700');
+    if (score >= 120) return identity('carry', 'bg-blue-500');
+    if (idx === total - 1 && score < 85) return identity('wanted', 'bg-red-600');
+    if (idx === total - 1) return identity('mascot', 'bg-orange-500');
+    if (eff >= 120) return identity('value', 'bg-emerald-500');
+    if (v >= 35) return identity('vision', 'bg-cyan-600');
+    if (d >= 8) return identity('deaths', 'bg-red-600');
+    if (k >= 10) return identity('kills', 'bg-rose-600');
+    if (a >= 15) return identity('assists', 'bg-yellow-600');
 
-    return { label: '평범한 시민', color: 'bg-slate-700' };
+    return identity('citizen', 'bg-slate-700');
   };
 
   if (loading)
