@@ -1,90 +1,102 @@
-import type { Metadata } from "next";
-import { Inter } from "next/font/google";
-import "./globals.css";
-import { cn } from "@/lib/utils";
-import Link from "next/link";
-import { Analytics } from "@vercel/analytics/next"
-import AdFitBanner from "@/components/AdBanner";
+import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
+import './globals.css';
+import { Activity, ArrowUpRight } from 'lucide-react';
+import Link from 'next/link';
+import { Analytics } from '@vercel/analytics/next';
+import AdFitBanner from '@/components/AdBanner';
 
-
-const inter = Inter({ subsets: ["latin"] });
+const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: "WINSAM.LOL | 진짜 캐리를 찾아라",
-  description: "팀 내 기여도 분석 시스템 (TCS)",
+  title: 'WINSAM.LOL | 진짜 캐리를 찾아라',
+  description: '팀 내 기여도 분석 시스템 (TCS)',
   keywords: [
-    "롤 전적 검색", "LoL 전적", "롤 기여도 분석", "TCS", "롤 캐리 측정",
-    "리그오브레전드 분석", "WINSAM", "윈삼", "롤 승률 계산", "진짜 캐리 찾기"
+    '롤 전적 검색',
+    'LoL 전적',
+    '롤 기여도 분석',
+    'TCS',
+    '롤 캐리 측정',
+    '리그오브레전드 분석',
+    'WINSAM',
+    '윈삼',
+    '롤 승률 계산',
+    '진짜 캐리 찾기',
   ],
-  authors: [{ name: "WINSAM Team" }],
+  authors: [{ name: 'WINSAM Team' }],
   // 검색 엔진 로봇 설정
-  robots: "index, follow",
+  robots: 'index, follow',
   // 소유권 확인 태그
   verification: {
-    google: "RNkeSZzWbR8T4Pp_OTNspdHciimBargpK1SBOpatEyY",
+    google: 'RNkeSZzWbR8T4Pp_OTNspdHciimBargpK1SBOpatEyY',
     other: {
-      "naver-site-verification": ["f1636c12cb4f939e132f87e747f74801cc0235b4"],
+      'naver-site-verification': ['f1636c12cb4f939e132f87e747f74801cc0235b4'],
     },
   },
   openGraph: {
-    type: "website",
-    url: "https://lol.winsam.xyz", // 실제 도메인으로 수정하세요
-    title: "WINSAM.LOL | 진짜 캐리를 찾아라",
-    description: "단순한 KDA를 넘어선 팀 기여도 분석 시스템! 당신의 진짜 실력을 확인하세요.",
-    siteName: "WINSAM.LOL",
+    type: 'website',
+    url: 'https://lol.winsam.xyz', // 실제 도메인으로 수정하세요
+    title: 'WINSAM.LOL | 진짜 캐리를 찾아라',
+    description: '단순한 KDA를 넘어선 팀 기여도 분석 시스템! 당신의 진짜 실력을 확인하세요.',
+    siteName: 'WINSAM.LOL',
   },
   // 트위터(X)용 설정
   twitter: {
-    card: "summary_large_image",
-    title: "WINSAM.LOL | 롤 기여도 분석",
-    description: "팀 내 기여도 분석 시스템 (TCS)으로 진짜 캐리를 가려내세요.",
+    card: 'summary_large_image',
+    title: 'WINSAM.LOL | 롤 기여도 분석',
+    description: '팀 내 기여도 분석 시스템 (TCS)으로 진짜 캐리를 가려내세요.',
   },
 };
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ko" className="dark">
-      <body
-        suppressHydrationWarning
-        className={cn(
-          inter.className,
-          "min-h-screen bg-[#0b0b0b] antialiased text-slate-200 relative",
-        )}
-      >
+      {/* Extensions may inject body attributes (e.g. cz-shortcut-listen) before hydration.
+          Limit suppression to this element; descendants retain hydration checks. */}
+      <body className={`${inter.className} min-h-screen antialiased`} suppressHydrationWarning>
         <Analytics />
-
-        {/* 헤더의 z-index를 50으로 설정하여 광고보다 위에 오도록 함 */}
-        <header className="sticky top-0 z-50 w-full border-b border-white/5 bg-[#0b0b0b]/80 backdrop-blur-md">
-          <div className="container mx-auto flex h-16 items-center justify-between px-6">
-            {/* 기존 헤더 내용 */}
-            <Link href="/" className="font-black text-2xl tracking-tighter text-white">
-              LOL.WINSAM<span className="text-blue-500">.XYZ</span>
+        <a href="#page-content" className="skip-link">
+          본문 바로가기
+        </a>
+        <header className="site-header">
+          <div className="site-header-inner">
+            <Link href="/" className="brand" aria-label="WINSAM 홈">
+              <span className="brand-symbol">
+                <Activity size={20} strokeWidth={2.5} />
+              </span>
+              <span>
+                WINSAM<span className="brand-suffix">.LOL</span>
+              </span>
             </Link>
+            <nav className="site-nav" aria-label="메인 메뉴">
+              <Link href="/#individual">개인 분석</Link>
+              <Link href="/#squad">스쿼드 분석</Link>
+            </nav>
+            <div className="region-label">
+              <span className="status-dot" /> KR REGION
+            </div>
           </div>
         </header>
-
-        {/* ─── 광고 레이어: z-index를 100으로 상향 ─── */}
-        <aside className="hidden 2xl:block fixed left-5 top-[100px] z-[100] w-[160px] h-[600px]">
-          <AdFitBanner key="left-ad" unitId="DAN-9yY5PCwh3z3a3VJp" width="160" height="600" />
+        <aside className="rail-ad rail-ad-left" aria-label="광고">
+          <AdFitBanner unitId="DAN-9yY5PCwh3z3a3VJp" width="160" height="600" />
         </aside>
-
-        {/* ─── 메인 콘텐츠: 광고가 절대 가리지 않도록 2xl에서 좌우 패딩 추가 ─── */}
-        <main className="2xl:px-[200px]">
+        <div id="page-content" className="site-content">
           {children}
-        </main>
-
-        <aside className="hidden 2xl:block fixed right-5 top-[100px] z-[100] w-[160px] h-[600px]">
-          <AdFitBanner key="right-ad" unitId="DAN-ZLGWx5TkrW2vavX5" width="160" height="600" />
+        </div>
+        <aside className="rail-ad rail-ad-right" aria-label="광고">
+          <AdFitBanner unitId="DAN-ZLGWx5TkrW2vavX5" width="160" height="600" />
         </aside>
-
-        <script
-          type="text/javascript"
-          src="//t1.daumcdn.net/kas/static/ba.min.js"
-          async
-        ></script>
+        <footer className="site-footer page-width">
+          <div>
+            <Link href="/" className="footer-brand">
+              WINSAM.LOL <ArrowUpRight size={14} />
+            </Link>
+            <p>좋은 플레이를 알아보는 또 하나의 시선.</p>
+          </div>
+          <div className="footer-meta">
+            <span>LEAGUE OF LEGENDS PERFORMANCE ANALYSIS</span>
+            <span>WINSAM.LOL은 Riot Games의 공식 서비스가 아닙니다.</span>
+          </div>
+        </footer>
       </body>
     </html>
   );

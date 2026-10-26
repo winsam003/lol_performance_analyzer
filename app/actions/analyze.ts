@@ -6,7 +6,6 @@ import {
     getMatchDetail,
     getMatchIds,
     getSummonerByPuuid,
-    LeagueEntry,
     RiotMatchDetail,
 } from "@/lib/riot";
 
@@ -17,6 +16,15 @@ export interface MatchParticipant {
 }
 
 export interface SquadMemberPerformance {
+    puuid: string;
+    teamId: number;
+    item0?: number;
+    item1?: number;
+    item2?: number;
+    item3?: number;
+    item4?: number;
+    item5?: number;
+    item6?: number;
     gameName: string;
     tagLine: string;
     role: PlayerRole;
@@ -45,10 +53,11 @@ export interface SquadMemberPerformance {
 }
 
 export interface AnalyzedMatch {
+    teamId: number;
     id: string;
     queueId: number;
     champion: string;
-    role: "TOP" | "JNG" | "MID" | "ADC" | "SUP";
+    role: "TOP" | "JNG" | "MID" | "ADC" | "SUP" | "UNKNOWN";
     result: "WIN" | "LOSE";
     kda: string;
     score: number;
@@ -85,11 +94,12 @@ export interface SummonerProfile {
 }
 
 export interface AnalysisResult {
+    warnings: string[];
     profile: SummonerProfile;
     matches: AnalyzedMatch[];
 }
 
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 
 export type PlayerRole = "TOP" | "JUNGLE" | "MIDDLE" | "BOTTOM" | "UTILITY" | "UNKNOWN";
 
@@ -153,6 +163,7 @@ const getPlayerRole = (participant: ScoringParticipant): PlayerRole => {
 };
 
 const averageMetrics = (metrics: ParticipantMetrics[]): ParticipantMetrics => {
+    if (!metrics.length) throw new Error("상대 팀 지표가 없습니다.");
     const keys = Object.keys(metrics[0]) as Array<keyof ParticipantMetrics>;
     return keys.reduce<ParticipantMetrics>((result, key) => {
         result[key] = metrics.reduce((sum, metric) => sum + metric[key], 0) / metrics.length;
@@ -211,9 +222,10 @@ const getParticipantMetrics = (
 function calculateContributionScore(
     participant: ScoringParticipant,
     participants: ScoringParticipant[],
+    metricsByParticipant: Map<ScoringParticipant, ParticipantMetrics>,
 ) {
     const role = getPlayerRole(participant);
-    const metrics = getParticipantMetrics(participant, participants);
+    const metrics = metricsByParticipant.get(participant)!;
     const sameRoleOpponents = participants.filter(
         member => member.teamId !== participant.teamId && getPlayerRole(member) === role,
     );
@@ -221,7 +233,7 @@ function calculateContributionScore(
         ? sameRoleOpponents
         : participants.filter(member => member.teamId !== participant.teamId);
     const reference = averageMetrics(
-        referencePlayers.map(member => getParticipantMetrics(member, participants)),
+        referencePlayers.map(member => metricsByParticipant.get(member)!),
     );
 
     let baseImpact = compareMetric(metrics.killParticipation, reference.killParticipation, 8, 0.15);
@@ -308,22 +320,26 @@ function calculateContributionScore(
     return { score, breakdown, metrics };
 }
 
-export async function analyzeSummoner(gameName: string, tagLine: string): Promise<AnalysisResult | null> {
+export async function analyzeSummoner(gameName: string, tagLine: string): Promise<AnalysisResult | { error: string } | null> {
+    if (typeof gameName !== "string" || typeof tagLine !== "string" || !gameName.trim() || !tagLine.trim() || gameName.length > 100 || tagLine.length > 20) {
+        return { error: "소환사명과 태그를 확인해주세요." };
+    }
     try {
         const account = await getAccount(gameName, tagLine);
         if (!account) return null;
 
-        const summoner = await getSummonerByPuuid(account.puuid);
+        const warnings: string[] = [];
+        const [summoner, leagueResult, matchIds] = await Promise.all([
+            getSummonerByPuuid(account.puuid),
+            getLeagueEntries(account.puuid).then(
+                entries => ({ entries, failed: false }),
+                () => ({ entries: [], failed: true }),
+            ),
+            getMatchIds(account.puuid, 20),
+        ]);
         if (!summoner) return null;
-
-        let leagues: LeagueEntry[] = [];
-        try {
-            leagues = await getLeagueEntries(account.puuid) || [];
-        } catch (lError: unknown) {
-            const message = lError instanceof Error ? lError.message : String(lError);
-            console.warn(`⚠️ 리그 조회 실패:`, message);
-            leagues = [];
-        }
+        const leagues = leagueResult.entries;
+        if (leagueResult.failed) warnings.push("랭크 정보를 가져오지 못했습니다.");
 
         const soloRank = leagues.find(league => league.queueType === "RANKED_SOLO_5x5");
         const flexRank = leagues.find(league => league.queueType === "RANKED_FLEX_SR");
@@ -334,7 +350,7 @@ export async function analyzeSummoner(gameName: string, tagLine: string): Promis
             tag: account.tagLine,
             level: summoner.summonerLevel,
             iconId: summoner.profileIconId,
-            tier: mainLeague ? `${mainLeague.tier} ${mainLeague.rank}` : "UNRANKED",
+            tier: mainLeague ? `${mainLeague.tier} ${mainLeague.rank}` : leagueResult.failed ? "조회 실패" : "UNRANKED",
             lp: mainLeague ? mainLeague.leaguePoints : 0,
             wins: mainLeague ? mainLeague.wins : 0,
             losses: mainLeague ? mainLeague.losses : 0,
@@ -343,28 +359,17 @@ export async function analyzeSummoner(gameName: string, tagLine: string): Promis
                 : "0%",
         };
 
-        const matchIds = await getMatchIds(account.puuid, 20);
-        const matchesRaw: Array<RiotMatchDetail | null> = [];
-
-        const chunkSize = 3;
-
-        for (let i = 0; i < matchIds.length; i += chunkSize) {
-            const chunk = matchIds.slice(i, i + chunkSize);
-            
-            const chunkResults = await Promise.all(
-                chunk.map(id => getMatchDetail(id))
-            );
-            
-            matchesRaw.push(...chunkResults);
-
-            if (i + chunkSize < matchIds.length) {
-                await delay(750);
-            }
+        const results = await Promise.allSettled(matchIds.map(id => getMatchDetail(id)));
+        const filteredMatchesRaw: RiotMatchDetail[] = [];
+        for (const result of results) {
+            if (result.status === "fulfilled" && result.value) filteredMatchesRaw.push(result.value);
         }
-
-        const filteredMatchesRaw = matchesRaw.filter(
-            (match): match is RiotMatchDetail => match !== null,
-        );
+        const missingCount = matchIds.length - filteredMatchesRaw.length;
+        if (missingCount) warnings.push(`${missingCount}경기를 가져오지 못했습니다. 표시된 경기만 분석합니다.`);
+        if (matchIds.length && !filteredMatchesRaw.length) {
+            const failure = results.find(result => result.status === "rejected");
+            throw failure?.status === "rejected" ? failure.reason : new Error("경기 정보를 가져오지 못했습니다.");
+        }
 
         const analyzedMatches: AnalyzedMatch[] = filteredMatchesRaw
             .filter((m) => m && m.info)
@@ -376,9 +381,12 @@ export async function analyzeSummoner(gameName: string, tagLine: string): Promis
                 const hoursAgo = Math.floor((now - match.info.gameEndTimestamp) / (1000 * 60 * 60));
                 const dateStr = hoursAgo < 24 ? `${hoursAgo}시간 전` : `${Math.floor(hoursAgo / 24)}일 전`;
 
+                const metricsByParticipant = new Map(match.info.participants.map(p => [p, getParticipantMetrics(p, match.info.participants)]));
                 const allParticipants: SquadMemberPerformance[] = match.info.participants.map(p => {
-                    const analysis = calculateContributionScore(p, match.info.participants);
+                    const analysis = calculateContributionScore(p, match.info.participants, metricsByParticipant);
                     return {
+                        puuid: p.puuid,
+                        teamId: p.teamId,
                         gameName: p.riotIdGameName || p.summonerName || "Unknown",
                         tagLine: p.riotIdTagline || "KR1",
                         role: getPlayerRole(p),
@@ -408,9 +416,10 @@ export async function analyzeSummoner(gameName: string, tagLine: string): Promis
                     };
                 });
 
-                const mainAnalysis = calculateContributionScore(participant, match.info.participants);
+                const mainAnalysis = allParticipants.find(p => p.puuid === account.puuid)!;
 
                 return {
+                    teamId: participant.teamId,
                     id: match.metadata.matchId,
                     queueId: match.info.queueId,
                     champion: participant.championName,
@@ -418,7 +427,7 @@ export async function analyzeSummoner(gameName: string, tagLine: string): Promis
                         : participant.teamPosition === "JUNGLE" ? "JNG"
                             : participant.teamPosition === "BOTTOM" ? "ADC"
                                 : participant.teamPosition === "MIDDLE" ? "MID"
-                                    : participant.teamPosition === "TOP" ? "TOP" : "MID",
+                                    : participant.teamPosition === "TOP" ? "TOP" : "UNKNOWN",
                     result: participant.win ? "WIN" : "LOSE",
                     kda: `${participant.kills}/${participant.deaths}/${participant.assists}`,
                     score: mainAnalysis.score,
@@ -442,9 +451,9 @@ export async function analyzeSummoner(gameName: string, tagLine: string): Promis
             })
             .filter((m): m is AnalyzedMatch => m !== null);
 
-        return { profile, matches: analyzedMatches };
+        return { profile, matches: analyzedMatches, warnings };
     } catch (error: unknown) {
         console.error("❌ 분석 중 치명적 에러 발생:", error);
-        return null;
+        return { error: error instanceof Error ? error.message : "분석에 실패했습니다. 잠시 후 다시 시도해주세요." };
     }
 }

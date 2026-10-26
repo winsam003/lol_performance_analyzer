@@ -1,206 +1,223 @@
-const API_KEY = process.env.NEXT_PUBLIC_RIOT_API_KEY || process.env.RIOT_API_KEY;
-const REGION = "kr"; // Platform routing value (e.g., kr, na1)
-const MASS_REGION = "asia"; // Regional routing value (e.g., asia, americas)
+import { unstable_cache } from 'next/cache';
+
+const API_KEY = process.env.RIOT_API_KEY || process.env.NEXT_PUBLIC_RIOT_API_KEY;
+const REGION = 'kr'; // Platform routing value (e.g., kr, na1)
+const MASS_REGION = 'asia'; // Regional routing value (e.g., asia, americas)
 const MAX_RATE_LIMIT_RETRIES = 2;
 const MAX_RATE_LIMIT_WAIT_MS = 10_000;
 let rateLimitUntil = 0;
 
-const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const getRetryAfterMs = (retryAfter: string | null, attempt: number) => {
-    if (retryAfter) {
-        const seconds = Number(retryAfter);
-        if (Number.isFinite(seconds)) return Math.max(seconds * 1000, 1000);
+  if (retryAfter) {
+    const seconds = Number(retryAfter);
+    if (Number.isFinite(seconds)) return Math.max(seconds * 1000, 1000);
 
-        const retryDate = Date.parse(retryAfter);
-        if (Number.isFinite(retryDate)) return Math.max(retryDate - Date.now(), 1000);
-    }
+    const retryDate = Date.parse(retryAfter);
+    if (Number.isFinite(retryDate)) return Math.max(retryDate - Date.now(), 1000);
+  }
 
-    return 1000 * (2 ** attempt);
+  return 1000 * 2 ** attempt;
 };
 
-const fetchWithAuth = async <T>(
-    url: string,
-    revalidateSeconds: number,
-    attempt: number = 0,
-): Promise<T | null> => {
-    const cleanKey = API_KEY?.trim();
-    const pendingRateLimitMs = Math.max(rateLimitUntil - Date.now(), 0);
+// All callers in this server process share the same request budget.
+// Persistent cache hits bypass this queue entirely.
+const requestStarts: number[] = [];
+let queue: Promise<unknown> = Promise.resolve();
+const activeRequests = new Set<Promise<unknown>>();
+let startQueue: Promise<unknown> = Promise.resolve();
+const inFlight = new Map<string, Promise<unknown>>();
 
-    if (pendingRateLimitMs > MAX_RATE_LIMIT_WAIT_MS) {
-        throw new Error(`Riot API 요청 제한 중입니다. ${Math.ceil(pendingRateLimitMs / 1000)}초 후 다시 시도해주세요.`);
-    }
-    if (pendingRateLimitMs > 0) await wait(pendingRateLimitMs);
-
-    const res = await fetch(url, {
-        headers: {
-            "X-Riot-Token": cleanKey || "",
-        },
-        next: { revalidate: revalidateSeconds },
-    });
-
-    if (!res.ok) {
-        const errorBody = await res.text(); // 에러 내용 확인
-        console.error(`[RIOT_ERROR_BODY] ${errorBody}`);
-
-        if (res.status === 404) return null;
-        if (res.status === 429) {
-            const retryAfterMs = getRetryAfterMs(res.headers.get("retry-after"), attempt);
-            rateLimitUntil = Math.max(rateLimitUntil, Date.now() + retryAfterMs);
-
-            if (attempt < MAX_RATE_LIMIT_RETRIES && retryAfterMs <= MAX_RATE_LIMIT_WAIT_MS) {
-                await wait(retryAfterMs);
-                return fetchWithAuth<T>(url, revalidateSeconds, attempt + 1);
-            }
-
-            throw new Error(
-                `Riot API 요청 한도를 초과했습니다. ${Math.ceil(retryAfterMs / 1000)}초 후 다시 시도해주세요.`,
-            );
+async function requestFromRiot<T>(url: string): Promise<T | null> {
+  for (let attempt = 0; attempt <= MAX_RATE_LIMIT_RETRIES; attempt += 1) {
+    const admission = startQueue.then(async () => {
+      // A concurrent 429 may extend the cooldown while this request is waiting.
+      while (true) {
+        const now = Date.now();
+        while (requestStarts.length && requestStarts[0] <= now - 120_000) requestStarts.shift();
+        const shortWindow = requestStarts.filter((start) => start > now - 750);
+        const waitUntil = Math.max(
+          rateLimitUntil,
+          shortWindow.length >= 3 ? shortWindow[shortWindow.length - 3] + 750 : 0,
+          requestStarts.length >= 90 ? requestStarts[requestStarts.length - 90] + 120_000 : 0,
+        );
+        const waitMs = waitUntil - Date.now();
+        if (waitMs > MAX_RATE_LIMIT_WAIT_MS) {
+          throw new Error(
+            `Riot API 요청 제한 중입니다. ${Math.ceil(waitMs / 1000)}초 후 다시 시도해주세요.`,
+          );
         }
-        throw new Error(`Riot API Error: ${res.status} ${res.statusText} at ${url}`);
+        if (waitMs <= 0) break;
+        await wait(waitMs);
+      }
+      requestStarts.push(Date.now());
+    });
+    startQueue = admission.catch(() => undefined);
+    await admission;
+    const res = await fetch(url, {
+      headers: { 'X-Riot-Token': API_KEY?.trim() || '' },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (res.status === 404) return null;
+    if (res.status === 429) {
+      const retryMs = getRetryAfterMs(res.headers.get('retry-after'), attempt);
+      rateLimitUntil = Math.max(rateLimitUntil, Date.now() + retryMs);
+      if (attempt < MAX_RATE_LIMIT_RETRIES && retryMs <= MAX_RATE_LIMIT_WAIT_MS) continue;
+      throw new Error(
+        `Riot API 요청 한도를 초과했습니다. ${Math.ceil(retryMs / 1000)}초 후 다시 시도해주세요.`,
+      );
     }
+    if (!res.ok) throw new Error(`Riot API 조회 실패 (${res.status}). 잠시 후 다시 시도해주세요.`);
+    return (await res.json()) as T;
+  }
+  throw new Error('Riot API 조회에 실패했습니다.');
+}
 
-    const data = await res.json() as T;
-
-    return data;
-};
+async function fetchWithAuth<T>(url: string, revalidateSeconds: number): Promise<T | null> {
+  const existing = inFlight.get(url);
+  if (existing) return existing as Promise<T | null>;
+  const cached = unstable_cache(
+    async () => {
+      const admission = queue.then(async () => {
+        if (activeRequests.size >= 3) await Promise.race(activeRequests);
+        const request = requestFromRiot<T>(url);
+        const completion = request.then(
+          () => undefined,
+          () => undefined,
+        );
+        activeRequests.add(completion);
+        void completion.then(() => activeRequests.delete(completion));
+        return { request };
+      });
+      queue = admission.then(
+        () => undefined,
+        () => undefined,
+      );
+      return (await admission).request;
+    },
+    ['riot-v2', url],
+    { revalidate: revalidateSeconds },
+  );
+  const request = cached();
+  inFlight.set(url, request);
+  try {
+    return await request;
+  } finally {
+    inFlight.delete(url);
+  }
+}
 
 export interface RiotAccount {
-    puuid: string;
-    gameName: string;
-    tagLine: string;
+  puuid: string;
+  gameName: string;
+  tagLine: string;
 }
 
 export interface RiotSummoner {
-    id?: string; // Encrypted summoner ID (신규 응답에서는 없을 수 있음)
-    accountId: string;
-    puuid: string;
-    name: string;
-    profileIconId: number;
-    revisionDate: number;
-    summonerLevel: number;
+  id?: string; // Encrypted summoner ID (신규 응답에서는 없을 수 있음)
+  accountId: string;
+  puuid: string;
+  name: string;
+  profileIconId: number;
+  revisionDate: number;
+  summonerLevel: number;
 }
 
 export interface LeagueEntry {
-    leagueId: string;
-    queueType: string;
-    tier: string;
-    rank: string;
-    summonerId: string;
-    summonerName: string;
-    leaguePoints: number;
-    wins: number;
-    losses: number;
-    veteran: boolean;
-    inactive: boolean;
-    freshBlood: boolean;
-    hotStreak: boolean;
+  leagueId: string;
+  queueType: string;
+  tier: string;
+  rank: string;
+  summonerId: string;
+  summonerName: string;
+  leaguePoints: number;
+  wins: number;
+  losses: number;
+  veteran: boolean;
+  inactive: boolean;
+  freshBlood: boolean;
+  hotStreak: boolean;
 }
 
 export interface RiotMatchParticipant {
-    puuid: string;
-    summonerId?: string;
-    riotIdGameName?: string;
-    riotIdTagline?: string;
-    summonerName?: string;
-    championName: string;
-    teamId: number;
-    teamPosition?: string;
-    kills: number;
-    deaths: number;
-    assists: number;
-    goldEarned: number;
-    totalDamageDealtToChampions: number;
-    totalDamageTaken: number;
-    damageSelfMitigated?: number;
-    damageDealtToTurrets?: number;
-    totalMinionsKilled?: number;
-    neutralMinionsKilled?: number;
-    visionScore: number;
-    timeCCingOthers?: number;
-    totalTimeCCDealt?: number;
-    totalHealsOnTeammates?: number;
-    totalDamageShieldedOnTeammates?: number;
-    timePlayed?: number;
-    win: boolean;
-    item0?: number;
-    item1?: number;
-    item2?: number;
-    item3?: number;
-    item4?: number;
-    item5?: number;
-    item6?: number;
-    challenges?: {
-        baronTakedowns?: number;
-        dragonTakedowns?: number;
-        riftHeraldTakedowns?: number;
-        objectivesStolen?: number;
-    };
+  puuid: string;
+  summonerId?: string;
+  riotIdGameName?: string;
+  riotIdTagline?: string;
+  summonerName?: string;
+  championName: string;
+  teamId: number;
+  teamPosition?: string;
+  kills: number;
+  deaths: number;
+  assists: number;
+  goldEarned: number;
+  totalDamageDealtToChampions: number;
+  totalDamageTaken: number;
+  damageSelfMitigated?: number;
+  damageDealtToTurrets?: number;
+  totalMinionsKilled?: number;
+  neutralMinionsKilled?: number;
+  visionScore: number;
+  timeCCingOthers?: number;
+  totalTimeCCDealt?: number;
+  totalHealsOnTeammates?: number;
+  totalDamageShieldedOnTeammates?: number;
+  timePlayed?: number;
+  win: boolean;
+  item0?: number;
+  item1?: number;
+  item2?: number;
+  item3?: number;
+  item4?: number;
+  item5?: number;
+  item6?: number;
+  challenges?: {
+    baronTakedowns?: number;
+    dragonTakedowns?: number;
+    riftHeraldTakedowns?: number;
+    objectivesStolen?: number;
+  };
 }
 
 export interface RiotMatchDetail {
-    metadata: {
-        matchId: string;
-    };
-    info: {
-        gameEndTimestamp: number;
-        queueId: number;
-        participants: RiotMatchParticipant[];
-    };
+  metadata: {
+    matchId: string;
+  };
+  info: {
+    gameEndTimestamp: number;
+    queueId: number;
+    participants: RiotMatchParticipant[];
+  };
 }
 
-export const getAccount = async (gameName: string, tagLine: string): Promise<RiotAccount | null> => {
-    const url = `https://${MASS_REGION}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(gameName)}/${encodeURIComponent(tagLine)}`;
-    return fetchWithAuth<RiotAccount>(url, 300);
+export const getAccount = async (
+  gameName: string,
+  tagLine: string,
+): Promise<RiotAccount | null> => {
+  const url = `https://${MASS_REGION}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(gameName)}/${encodeURIComponent(tagLine)}`;
+  return fetchWithAuth<RiotAccount>(url, 300);
 };
 
 export const getSummonerByPuuid = async (puuid: string): Promise<RiotSummoner | null> => {
-    const url = `https://${REGION}.api.riotgames.com/lol/summoner/v4/summoners/by-puuid/${puuid}`;
-    const data = await fetchWithAuth<RiotSummoner>(url, 300);
-
-    if (!data) return null;
-
-    if (!data.id) {
-        console.warn(`[RIOT_FIX] Summoner ID missing for ${puuid}. Attempting to fetch via Match API...`);
-        try {
-            const matches = await getMatchIds(puuid, 1);
-            if (matches.length > 0) {
-                const match = await getMatchDetail(matches[0]);
-                if (match && match.info) {
-                    const participant = match.info.participants.find(p => p.puuid === puuid);
-                    if (participant && participant.summonerId) {
-                        console.log(`[RIOT_FIX] Found Summoner ID via Match API: ${participant.summonerId}`);
-                        data.id = participant.summonerId;
-                    }
-                }
-            }
-        } catch (e) {
-            console.error("[RIOT_FIX] Failed to recover Summoner ID via Match API", e);
-        }
-    }
-
-    return data;
+  const url = `https://${REGION}.api.riotgames.com/lol/summoner/v4/summoners/by-puuid/${puuid}`;
+  return fetchWithAuth<RiotSummoner>(url, 300);
 };
 
 export async function getLeagueEntries(puuid: string): Promise<LeagueEntry[]> {
-    // const url = `https://${REGION}.api.riotgames.com/lol/league/v4/entries/by-summoner/${encryptedSummonerId}`;
-    const url = `https://kr.api.riotgames.com/lol/league/v4/entries/by-puuid/${puuid}`;
-    try {
-        const data = await fetchWithAuth<LeagueEntry[]>(url, 60);
-        return data || [];
-    } catch (error) {
-        console.warn(`[RIOT_LEAGUE_WARNING] Failed to fetch league entries: ${error}`);
-        return [];
-    }
-};
+  const url = `https://${REGION}.api.riotgames.com/lol/league/v4/entries/by-puuid/${puuid}`;
+  return (await fetchWithAuth<LeagueEntry[]>(url, 60)) || [];
+}
 
 export const getMatchIds = async (puuid: string, count: number = 20): Promise<string[]> => {
-    const url = `https://${MASS_REGION}.api.riotgames.com/lol/match/v5/matches/by-puuid/${puuid}/ids?start=0&count=${count}`;
-    const data = await fetchWithAuth<string[]>(url, 60);
-    return data || [];
+  const url = `https://${MASS_REGION}.api.riotgames.com/lol/match/v5/matches/by-puuid/${puuid}/ids?start=0&count=${count}`;
+  const data = await fetchWithAuth<string[]>(url, 60);
+  return data || [];
 };
 
 export const getMatchDetail = async (matchId: string): Promise<RiotMatchDetail | null> => {
-    const url = `https://${MASS_REGION}.api.riotgames.com/lol/match/v5/matches/${matchId}`;
-    return fetchWithAuth<RiotMatchDetail>(url, 86_400);
+  const url = `https://${MASS_REGION}.api.riotgames.com/lol/match/v5/matches/${matchId}`;
+  return fetchWithAuth<RiotMatchDetail>(url, 86_400);
 };
